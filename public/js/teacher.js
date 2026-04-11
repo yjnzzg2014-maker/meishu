@@ -7,6 +7,8 @@ class TeacherApp {
     this.mode = 'axisymmetric';
     this.breathPhase = 0;
     this.connectedCount = 0;
+    this.isConnected = false;
+    this.animationId = null;
 
     this.init();
   }
@@ -64,13 +66,19 @@ class TeacherApp {
 
     // Track connections
     this.client.socket.on('connect', () => {
-      this.connectedCount++;
-      document.getElementById('connection-count').textContent = `已连接：${this.connectedCount} 台设备`;
+      if (!this.isConnected) {
+        this.isConnected = true;
+        this.connectedCount++;
+        document.getElementById('connection-count').textContent = `已连接：${this.connectedCount} 台设备`;
+      }
     });
 
     this.client.socket.on('disconnect', () => {
-      this.connectedCount = Math.max(0, this.connectedCount - 1);
-      document.getElementById('connection-count').textContent = `已连接：${this.connectedCount} 台设备`;
+      if (this.isConnected) {
+        this.isConnected = false;
+        this.connectedCount = Math.max(0, this.connectedCount - 1);
+        document.getElementById('connection-count').textContent = `已连接：${this.connectedCount} 台设备`;
+      }
     });
   }
 
@@ -84,10 +92,17 @@ class TeacherApp {
         (Math.sin(this.breathPhase) + 1) / 2;
 
       this.render(glowIntensity);
-      requestAnimationFrame(animate);
+      this.animationId = requestAnimationFrame(animate);
     };
 
     animate();
+  }
+
+  stopAnimation() {
+    if (this.animationId) {
+      cancelAnimationFrame(this.animationId);
+      this.animationId = null;
+    }
   }
 
   render(glowIntensity = 1) {
@@ -151,9 +166,9 @@ class TeacherApp {
 
   renderAxisymmetric(ctx) {
     const workingShapes = this.shapes.filter(s => {
-      const dx = s.x - this.centerX * 2; // Scale to preview canvas
-      const dy = s.y - this.centerY * 2;
-      return dx <= 0 && dy >= 0;
+      // Original canvas is 800x800, center at (400, 400)
+      // Working quadrant is bottom-left where x <= 400 and y >= 400
+      return s.x <= 400 && s.y >= 400;
     });
 
     workingShapes.forEach(shape => {

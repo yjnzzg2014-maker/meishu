@@ -31,7 +31,7 @@ const AssetLoader = {
     for (const skin of SUN_SKINS) {
       // If skin has an image path, load the actual image
       if (skin.imagePath) {
-        const img = await this.loadImage(skin.imagePath);
+        const img = await this.loadImage(skin.imagePath, skin.makeWhiteTransparent);
         if (img) {
           // Scale to standard size (400x400)
           const size = 400;
@@ -106,14 +106,37 @@ const AssetLoader = {
     }
   },
 
-  loadImage(path) {
+  loadImage(path, makeWhiteTransparent = false) {
     return new Promise((resolve) => {
       const img = new Image();
-      img.onload = () => resolve(img);
+      img.onload = () => {
+        if (makeWhiteTransparent) {
+          // Convert white background to transparent
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const data = imageData.data;
+          for (let i = 0; i < data.length; i += 4) {
+            // If pixel is mostly white (R>240, G>240, B>240), make it transparent
+            if (data[i] > 240 && data[i + 1] > 240 && data[i + 2] > 240) {
+              data[i + 3] = 0;
+            }
+          }
+          ctx.putImageData(imageData, 0, 0);
+          const transparentImg = new Image();
+          transparentImg.onload = () => resolve(transparentImg);
+          transparentImg.src = canvas.toDataURL();
+        } else {
+          resolve(img);
+        }
+      };
       img.onerror = () => resolve(null);
       img.src = '/' + path;
     });
-  },,
+  },
 
   // --- Shape Assets ---
   async generateShapeAssets() {

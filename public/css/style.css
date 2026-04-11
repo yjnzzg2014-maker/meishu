@@ -1,0 +1,152 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: 'PingFang SC', 'Helvetica Neue', Arial, sans-serif;
+}
+
+body {
+  background: linear-gradient(180deg, #FFE5EC 0%, #FFDAC1 50%, #FFF5E6 100%);
+}
+
+#app {
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+
+/* Shape Panel - Left Side */
+#shape-panel {
+  width: 140px;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+  border-radius: 0 24px 24px 0;
+  padding: 16px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  align-content: start;
+  overflow-y: auto;
+  box-shadow: 4px 0 20px rgba(0,0,0,0.08);
+}
+
+.shape-item {
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 16px;
+  background: white;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.shape-item:active {
+  transform: scale(0.92);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+
+.shape-item svg {
+  width: 36px;
+  height: 36px;
+}
+
+/* Canvas Container */
+#canvas-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+#main-canvas {
+  border-radius: 50%;
+  box-shadow: 0 8px 40px rgba(255, 180, 50, 0.3);
+  touch-action: none;
+}
+
+/* Teacher App */
+#teacher-app {
+  padding: 24px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+#teacher-app h1 {
+  text-align: center;
+  color: #E8A87C;
+  font-size: 28px;
+  margin-bottom: 24px;
+}
+
+#control-panel {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.control-section {
+  flex: 1;
+  background: white;
+  border-radius: 20px;
+  padding: 20px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+}
+
+.control-section h3 {
+  color: #E8A87C;
+  font-size: 16px;
+  margin-bottom: 12px;
+}
+
+.mode-buttons {
+  display: flex;
+  gap: 12px;
+}
+
+.mode-btn {
+  flex: 1;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 12px;
+  font-size: 15px;
+  cursor: pointer;
+  background: #F5F5F5;
+  color: #888;
+  transition: all 0.2s ease;
+}
+
+.mode-btn.active {
+  background: linear-gradient(135deg, #FFB366, #FF9933);
+  color: white;
+  box-shadow: 0 4px 15px rgba(255, 153, 51, 0.4);
+}
+
+#connection-count {
+  color: #666;
+  font-size: 14px;
+}
+
+#preview-container {
+  background: white;
+  border-radius: 20px;
+  padding: 16px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+}
+
+#preview-container canvas {
+  width: 100%;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #FFE5EC 0%, #FFDAC1 50%, #FFF5E6 100%);
+}

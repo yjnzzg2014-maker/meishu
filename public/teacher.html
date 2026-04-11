@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>太阳装饰家 - 教师端</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="teacher-app">
+    <h1>太阳装饰家 - 教师控制台</h1>
+    <div id="control-panel">
+      <div class="control-section">
+        <h3>镜像模式</h3>
+        <div class="mode-buttons">
+          <button id="btn-axisymmetric" class="mode-btn active">轴对称</button>
+          <button id="btn-quad" class="mode-btn">四分屏</button>
+        </div>
+      </div>
+      <div class="control-section">
+        <h3>学生连接</h3>
+        <div id="connection-count">已连接：0 台设备</div>
+      </div>
+    </div>
+    <div id="preview-container">
+      <canvas id="preview-canvas"></canvas>
+    </div>
+  </div>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="js/constants.js"></script>
+  <script src="js/canvas-utils.js"></script>
+  <script src="js/socket-client.js"></script>
+  <script src="js/teacher.js"></script>
+</body>
+</html>

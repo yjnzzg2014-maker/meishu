@@ -61,7 +61,7 @@ io.on('connection', (socket) => {
   });
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 2500;
 server.listen(PORT, () => {
   console.log(`Sun Decorator server running on http://localhost:${PORT}`);
 });

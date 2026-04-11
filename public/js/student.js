@@ -146,6 +146,7 @@ class StudentApp {
       }
 
       this.selectedShape = null;
+      this.canvas.releasePointerCapture(e.pointerId);
     });
 
     // Two-finger rotation via touch events
@@ -208,6 +209,9 @@ class StudentApp {
     });
 
     this.client.on('broadcast', ({ action, payload }) => {
+      // Shapes were updated by handleBroadcast on SocketClient
+      // Sync our local shapes from the client state
+      this.shapes = JSON.parse(JSON.stringify(this.client.state.shapes));
       this.render();
     });
 
@@ -231,6 +235,13 @@ class StudentApp {
     };
 
     animate();
+  }
+
+  stopAnimation() {
+    if (this.animationId) {
+      cancelAnimationFrame(this.animationId);
+      this.animationId = null;
+    }
   }
 
   render(glowIntensity = 1) {

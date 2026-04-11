@@ -1,25 +1,24 @@
+// Socket client for per-student architecture
 class SocketClient {
   constructor() {
     this.socket = null;
-    this.state = { shapes: [], mode: 'axisymmetric' };
     this.callbacks = {};
   }
 
   connect() {
     this.socket = io();
 
-    this.socket.on('sync_state', (state) => {
-      this.state = state;
-      this.trigger('sync', state);
-    });
+    // Forward all server events to registered callbacks
+    const events = [
+      'init_state', 'mode_changed', 'lock_changed', 'student_count',
+      // Teacher-specific events
+      'teacher_init', 'student_joined', 'student_left',
+      'student_updated', 'student_state', 'student_list',
+      'students_summary'
+    ];
 
-    this.socket.on('broadcast', (data) => {
-      this.handleBroadcast(data.action, data.payload);
-    });
-
-    this.socket.on('mode_changed', (data) => {
-      this.state.mode = data.mode;
-      this.trigger('modeChanged', data.mode);
+    events.forEach(event => {
+      this.socket.on(event, (data) => this.trigger(event, data));
     });
 
     return this;
@@ -37,50 +36,37 @@ class SocketClient {
     }
   }
 
-  handleBroadcast(action, payload) {
-    switch (action) {
-      case 'add_shape':
-        this.state.shapes.push(payload);
-        break;
-      case 'move_shape':
-        const moveShape = this.state.shapes.find(s => s.id === payload.id);
-        if (moveShape) { moveShape.x = payload.x; moveShape.y = payload.y; }
-        break;
-      case 'rotate_shape':
-        const rotateShape = this.state.shapes.find(s => s.id === payload.id);
-        if (rotateShape) rotateShape.angle = payload.angle;
-        break;
-      case 'delete_shape':
-        this.state.shapes = this.state.shapes.filter(s => s.id !== payload.id);
-        break;
-    }
-    this.trigger('broadcast', { action, payload });
+  // Student methods
+  registerStudent(data) {
+    this.socket.emit('register_student', data);
   }
 
-  addShape(shape) {
-    this.state.shapes.push(shape);
-    this.socket.emit('add_shape', shape);
+  updateState(state) {
+    this.socket.emit('update_state', state);
   }
 
-  moveShape(id, x, y) {
-    const shape = this.state.shapes.find(s => s.id === id);
-    if (shape) { shape.x = x; shape.y = y; }
-    this.socket.emit('move_shape', { id, x, y });
+  changeSkin(skinId) {
+    this.socket.emit('change_skin', { skinId });
   }
 
-  rotateShape(id, angle) {
-    const shape = this.state.shapes.find(s => s.id === id);
-    if (shape) shape.angle = angle;
-    this.socket.emit('rotate_shape', { id, angle });
-  }
-
-  deleteShape(id) {
-    this.state.shapes = this.state.shapes.filter(s => s.id !== id);
-    this.socket.emit('delete_shape', { id });
+  // Teacher methods
+  registerTeacher() {
+    this.socket.emit('register_teacher');
   }
 
   changeMode(mode) {
-    this.state.mode = mode;
     this.socket.emit('change_mode', { mode });
+  }
+
+  toggleLock(locked) {
+    this.socket.emit('toggle_lock', { locked });
+  }
+
+  getStudentState(studentId) {
+    this.socket.emit('get_student_state', { studentId });
+  }
+
+  getStudentList() {
+    this.socket.emit('get_student_list');
   }
 }

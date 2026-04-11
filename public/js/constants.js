@@ -14,31 +14,88 @@ const COLORS = {
   }
 };
 
-// Shape types
+// Shape types with categories
 const SHAPES = [
-  { id: 'circle', name: '圆形' },
-  { id: 'triangle', name: '三角形' },
-  { id: 'square', name: '正方形' },
-  { id: 'rectangle', name: '长方形' },
-  { id: 'flower', name: '花朵' },
-  { id: 'leaf', name: '树叶' },
-  { id: 'star', name: '星星' },
-  { id: 'cloud', name: '云朵' },
-  { id: 'bird', name: '小鸟' }
+  { id: 'circle', name: '圆形', category: 'geometry' },
+  { id: 'triangle', name: '三角形', category: 'geometry' },
+  { id: 'square', name: '正方形', category: 'geometry' },
+  { id: 'rectangle', name: '长方形', category: 'geometry' },
+  { id: 'flower', name: '花朵', category: 'nature' },
+  { id: 'leaf', name: '树叶', category: 'nature' },
+  { id: 'star', name: '星星', category: 'nature' },
+  { id: 'cloud', name: '云朵', category: 'nature' },
+  { id: 'bird', name: '小鸟', category: 'nature' }
 ];
 
-// Mirror modes
+const SHAPE_CATEGORIES = [
+  { id: 'geometry', name: '几何' },
+  { id: 'nature', name: '自然' }
+];
+
+// Three operating modes
 const MODES = {
-  AXISYMMETRIC: 'axisymmetric',
-  QUAD: 'quad'
+  SYMMETRIC: 'symmetric',     // Symmetric decoration around sun
+  PERSONIFY: 'personify',     // Face decoration on sun
+  FREE: 'free'                // Both types available
 };
 
-// Sun configuration
+// Sun skins
+const SUN_SKINS = [
+  { id: 'cartoon', name: '卡通', baseColor: '#FFD700', glowColor: '#FFA500', rayColor: '#FFCC00', faceColor: '#E8A000' },
+  { id: 'watercolor', name: '水彩', baseColor: '#FFE082', glowColor: '#FFCC80', rayColor: '#FFD54F', faceColor: '#D4A056' },
+  { id: 'sketch', name: '简笔画', baseColor: '#FFF9C4', glowColor: '#FFF176', rayColor: '#FFF59D', faceColor: '#C0A030' },
+  { id: 'sunset', name: '夕阳', baseColor: '#FF8A65', glowColor: '#FF5722', rayColor: '#FF7043', faceColor: '#BF360C' }
+];
+
+// Face part definitions for personify mode
+const FACE_PARTS = {
+  eyes: [
+    { id: 'eyes_round', name: '圆眼' },
+    { id: 'eyes_happy', name: '开心眼' },
+    { id: 'eyes_star', name: '星星眼' },
+    { id: 'eyes_wink', name: '眨眼' },
+    { id: 'eyes_sleepy', name: '困困眼' }
+  ],
+  noses: [
+    { id: 'nose_dot', name: '小圆鼻' },
+    { id: 'nose_triangle', name: '三角鼻' },
+    { id: 'nose_button', name: '纽扣鼻' }
+  ],
+  mouths: [
+    { id: 'mouth_smile', name: '微笑' },
+    { id: 'mouth_laugh', name: '大笑' },
+    { id: 'mouth_kiss', name: '嘟嘟嘴' },
+    { id: 'mouth_surprised', name: '惊讶' },
+    { id: 'mouth_tongue', name: '吐舌头' }
+  ],
+  extras: [
+    { id: 'extra_blush', name: '腮红' },
+    { id: 'extra_eyebrows_happy', name: '开心眉' },
+    { id: 'extra_eyebrows_angry', name: '生气眉' },
+    { id: 'extra_freckles', name: '雀斑' },
+    { id: 'extra_glasses', name: '眼镜' }
+  ]
+};
+
+const FACE_CATEGORIES = [
+  { id: 'eyes', name: '眼睛' },
+  { id: 'noses', name: '鼻子' },
+  { id: 'mouths', name: '嘴巴' },
+  { id: 'extras', name: '其他' }
+];
+
+// Sun configuration - much larger (35-40% of canvas diameter)
 const SUN_CONFIG = {
-  radius: 60,
-  rayCount: 8,
-  rayLength: 30,
-  breathingMin: 0.6,
-  breathingMax: 1.0,
-  breathingSpeed: 0.02
+  radiusRatio: 0.18,       // Sun radius as fraction of canvas radius (was fixed 60px ~15%)
+  rayCount: 12,
+  rayLengthRatio: 0.06,    // Ray length as fraction of canvas radius
+  breathingMin: 0.95,
+  breathingMax: 1.05,
+  breathingSpeed: 0.015
+};
+
+// Scale limits for pinch-zoom
+const SCALE_LIMITS = {
+  min: 0.5,
+  max: 2.5
 };

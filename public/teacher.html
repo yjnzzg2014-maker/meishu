@@ -3,31 +3,66 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>太阳装饰家 - 教师端</title>
+  <title>太阳装饰家 - 教师控制台</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+  <!-- Loading -->
+  <div id="loader" class="loader">
+    <div class="loader-sun"></div>
+    <p>加载中...</p>
+  </div>
+
   <div id="teacher-app">
-    <h1>太阳装饰家 - 教师控制台</h1>
-    <div id="control-panel">
-      <div class="control-section">
-        <h3>镜像模式</h3>
+    <div class="teacher-header">
+      <h1>太阳装饰家</h1>
+      <span class="teacher-badge">教师控制台</span>
+    </div>
+
+    <div id="control-bar">
+      <!-- Mode switcher -->
+      <div class="control-group">
+        <label>模式</label>
         <div class="mode-buttons">
-          <button id="btn-axisymmetric" class="mode-btn active">轴对称</button>
-          <button id="btn-quad" class="mode-btn">四分屏</button>
+          <button class="mode-btn active" data-mode="symmetric">对称装饰</button>
+          <button class="mode-btn" data-mode="personify">拟人化</button>
+          <button class="mode-btn" data-mode="free">自由模式</button>
         </div>
       </div>
-      <div class="control-section">
-        <h3>学生连接</h3>
-        <div id="connection-count">已连接：0 台设备</div>
+
+      <!-- Student count -->
+      <div class="control-group">
+        <label>连接</label>
+        <div id="student-count" class="count-display">0 位学生在线</div>
+      </div>
+
+      <!-- Lock -->
+      <div class="control-group">
+        <button id="btn-lock" class="lock-btn">锁定操作</button>
       </div>
     </div>
-    <div id="preview-container">
-      <canvas id="preview-canvas"></canvas>
+
+    <!-- Student grid -->
+    <div id="student-section">
+      <h2>学生作品</h2>
+      <div id="student-grid"></div>
+      <div id="empty-state" class="empty-state">
+        <p>等待学生加入...</p>
+      </div>
+    </div>
+
+    <!-- Zoom view overlay -->
+    <div id="zoom-view">
+      <div class="zoom-container">
+        <button id="close-zoom" class="close-btn">&times;</button>
+        <canvas id="zoom-canvas" width="500" height="500"></canvas>
+      </div>
     </div>
   </div>
+
   <script src="/socket.io/socket.io.js"></script>
   <script src="js/constants.js"></script>
+  <script src="js/asset-loader.js"></script>
   <script src="js/canvas-utils.js"></script>
   <script src="js/socket-client.js"></script>
   <script src="js/teacher.js"></script>

@@ -179,10 +179,13 @@ function drawLeaf(ctx, size, color) {
 function drawStar(ctx, size, color) {
   ctx.fillStyle = color;
   ctx.beginPath();
-  for (let i = 0; i < 5; i++) {
-    const angle = (i * 4 * Math.PI / 5) - Math.PI / 2;
-    const x = Math.cos(angle) * size;
-    const y = Math.sin(angle) * size;
+  const outerRadius = size;
+  const innerRadius = size * 0.4;
+  for (let i = 0; i < 10; i++) {
+    const radius = i % 2 === 0 ? outerRadius : innerRadius;
+    const angle = (i * Math.PI / 5) - Math.PI / 2;
+    const x = Math.cos(angle) * radius;
+    const y = Math.sin(angle) * radius;
     if (i === 0) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
   }

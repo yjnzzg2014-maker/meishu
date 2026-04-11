@@ -29,6 +29,26 @@ const AssetLoader = {
   // --- Sun Skins ---
   async generateSunSkins() {
     for (const skin of SUN_SKINS) {
+      // If skin has an image path, load the actual image
+      if (skin.imagePath) {
+        const img = await this.loadImage(skin.imagePath);
+        if (img) {
+          // Scale to standard size (400x400)
+          const size = 400;
+          const c = this.createCanvas(size, size);
+          const ctx = c.getContext('2d');
+          // Draw image scaled to fit
+          const scale = Math.min(size / img.width, size / img.height);
+          const w = img.width * scale;
+          const h = img.height * scale;
+          const x = (size - w) / 2;
+          const y = (size - h) / 2;
+          ctx.drawImage(img, x, y, w, h);
+          this.cache['sun_' + skin.id] = c;
+        }
+        continue;
+      }
+
       const size = 400;
       const c = this.createCanvas(size, size);
       const ctx = c.getContext('2d');
@@ -85,6 +105,15 @@ const AssetLoader = {
       this.cache['sun_' + skin.id] = c;
     }
   },
+
+  loadImage(path) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = '/' + path;
+    });
+  },,
 
   // --- Shape Assets ---
   async generateShapeAssets() {

@@ -44,7 +44,8 @@ const SUN_SKINS = [
   { id: 'cartoon', name: '卡通', baseColor: '#FFD700', glowColor: '#FFA500', rayColor: '#FFCC00', faceColor: '#E8A000' },
   { id: 'watercolor', name: '水彩', baseColor: '#FFE082', glowColor: '#FFCC80', rayColor: '#FFD54F', faceColor: '#D4A056' },
   { id: 'sketch', name: '简笔画', baseColor: '#FFF9C4', glowColor: '#FFF176', rayColor: '#FFF59D', faceColor: '#C0A030' },
-  { id: 'sunset', name: '夕阳', baseColor: '#FF8A65', glowColor: '#FF5722', rayColor: '#FF7043', faceColor: '#BF360C' }
+  { id: 'sunset', name: '夕阳', baseColor: '#FF8A65', glowColor: '#FF5722', rayColor: '#FF7043', faceColor: '#BF360C' },
+  { id: 'simple', name: '简约', imagePath: 'images/sun-simple.png' }
 ];
 
 // Face part definitions for personify mode

@@ -7,6 +7,8 @@ class TeacherApp {
     this.breathPhase = 0;
     this.animationId = null;
     this.zoomedStudentId = null;
+    this.selectedStudentId = null;
+    this.isDisplayActive = false;
 
     // Drawing tool
     this.drawTool = null;
@@ -48,8 +50,18 @@ class TeacherApp {
         this.client.toggleLock(this.locked);
         lockBtn.classList.toggle('active', this.locked);
         lockBtn.textContent = this.locked ? '已锁定' : '锁定操作';
+        // 更新推送展示按钮可见性
+        if (this.locked && this.selectedStudentId) {
+          document.getElementById('btn-broadcast').style.display = 'inline-block';
+        } else if (!this.isDisplayActive) {
+          document.getElementById('btn-broadcast').style.display = 'none';
+        }
       });
     }
+
+    // Broadcast buttons
+    document.getElementById('btn-broadcast').addEventListener('click', () => this.startBroadcast());
+    document.getElementById('btn-close-display').addEventListener('click', () => this.closeDisplay());
 
     // Close zoom button
     const closeZoom = document.getElementById('close-zoom');
@@ -431,7 +443,23 @@ class TeacherApp {
     label.textContent = state.name || 'Student';
     card.appendChild(label);
 
-    card.addEventListener('click', () => this.zoomStudent(id));
+    card.addEventListener('click', () => {
+      if (this.selectedStudentId === id) {
+        // 取消选中
+        this.selectedStudentId = null;
+        card.classList.remove('selected');
+        this.updateBroadcastButton();
+      } else {
+        // 选中
+        if (this.selectedStudentId) {
+          const prev = document.querySelector('.student-card.selected');
+          if (prev) prev.classList.remove('selected');
+        }
+        this.selectedStudentId = id;
+        card.classList.add('selected');
+        this.updateBroadcastButton();
+      }
+    });
 
     grid.appendChild(card);
 
@@ -482,6 +510,59 @@ class TeacherApp {
     this.zoomedStudentId = null;
     const zoomView = document.getElementById('zoom-view');
     if (zoomView) zoomView.classList.remove('visible');
+  }
+
+  updateBroadcastButton() {
+    const btnBroadcast = document.getElementById('btn-broadcast');
+    const btnClose = document.getElementById('btn-close-display');
+
+    if (this.isDisplayActive) {
+      btnBroadcast.style.display = 'none';
+      btnClose.style.display = 'inline-block';
+    } else if (this.selectedStudentId) {
+      btnBroadcast.style.display = 'inline-block';
+      btnClose.style.display = 'none';
+    } else {
+      btnBroadcast.style.display = 'none';
+      btnClose.style.display = 'none';
+    }
+  }
+
+  startBroadcast() {
+    const studentId = this.selectedStudentId;
+    if (!studentId) return;
+
+    // 获取被展示学生的数据
+    this.client.getStudentState(studentId);
+
+    this.client.on('student_state', (response) => {
+      if (response && response.id === studentId) {
+        // 自动开启锁定（如果未开启）
+        if (!this.locked) {
+          this.locked = true;
+          this.client.toggleLock(true);
+          const lockBtn = document.getElementById('btn-lock');
+          if (lockBtn) {
+            lockBtn.classList.add('active');
+            lockBtn.textContent = '已锁定';
+          }
+        }
+        // 广播给所有学生
+        this.client.broadcastDisplay({
+          studentId: response.id,
+          studentName: response.name,
+          state: response.state
+        });
+        this.isDisplayActive = true;
+        this.updateBroadcastButton();
+      }
+    });
+  }
+
+  closeDisplay() {
+    this.client.displayClosed();
+    this.isDisplayActive = false;
+    this.updateBroadcastButton();
   }
 
   startAnimation() {

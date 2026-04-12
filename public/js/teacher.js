@@ -548,7 +548,7 @@ class TeacherApp {
           }
         }
         // 广播给所有学生
-        this.client.broadcastDisplay({
+        this.socket.emit('broadcast_display', {
           studentId: response.id,
           studentName: response.name,
           state: response.state
@@ -560,7 +560,7 @@ class TeacherApp {
   }
 
   closeDisplay() {
-    this.client.displayClosed();
+    this.socket.emit('display_closed');
     this.isDisplayActive = false;
     this.updateBroadcastButton();
   }

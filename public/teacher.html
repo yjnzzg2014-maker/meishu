@@ -48,8 +48,10 @@
         <h2>素材管理</h2>
         <div class="section-actions">
           <button id="btn-draw-shape" class="action-btn">绘制素材</button>
+          <button id="btn-import-shape" class="action-btn">导入点线</button>
           <button id="btn-import-face" class="action-btn accent">导入五官</button>
           <input type="file" id="face-file-input" accept="image/*" style="display:none">
+          <input type="file" id="shape-file-input" accept="image/*" style="display:none">
         </div>
       </div>
 
@@ -64,6 +66,36 @@
           <h3>自定义五官</h3>
           <div id="custom-faces-grid" class="asset-grid"></div>
           <p id="no-custom-faces" class="empty-hint">暂无自定义五官，点击"导入五官"添加</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Shape import modal -->
+    <div id="shape-import-modal" class="draw-modal">
+      <div class="draw-modal-content" style="max-width:400px">
+        <div class="draw-modal-header">
+          <h3>导入点线素材</h3>
+          <button class="draw-close-btn" id="shape-modal-close">&times;</button>
+        </div>
+        <div class="draw-body" style="flex-direction:column;align-items:center;gap:16px;padding:20px">
+          <div id="shape-preview-area" class="face-preview-area">
+            <p>点击选择图片</p>
+          </div>
+          <div class="draw-field" style="width:100%">
+            <label>名称</label>
+            <input type="text" id="shape-import-name" class="draw-name-input" placeholder="素材名称" maxlength="10">
+          </div>
+          <div class="draw-field" style="width:100%">
+            <label>分类</label>
+            <div class="draw-category-btns">
+              <button class="shape-cat-btn active" data-cat="dots">点</button>
+              <button class="shape-cat-btn" data-cat="lines">线</button>
+            </div>
+          </div>
+        </div>
+        <div class="draw-modal-footer">
+          <button class="draw-cancel-btn" id="shape-modal-cancel">取消</button>
+          <button class="draw-save-btn" id="shape-modal-save">导入</button>
         </div>
       </div>
     </div>

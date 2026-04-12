@@ -927,6 +927,71 @@ body {
   accent-color: #FFB366;
 }
 
+.brush-style-selector, .shape-tool-selector {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.brush-style-btn, .shape-tool-btn {
+  width: 36px;
+  height: 36px;
+  border: 2px solid #EEE;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  font-size: 16px;
+}
+
+.brush-style-btn:hover, .shape-tool-btn:hover {
+  border-color: #FFB366;
+}
+
+.brush-style-btn.active, .shape-tool-btn.active {
+  border-color: #FF9933;
+  background: linear-gradient(135deg, #FFB366, #FF9933);
+}
+
+.brush-style-btn.active svg circle,
+.brush-style-btn.active svg rect,
+.brush-style-btn.active svg line,
+.brush-style-btn.active svg polygon {
+  fill: white;
+  stroke: white;
+}
+
+.shape-tool-btn {
+  font-size: 18px;
+  color: #666;
+}
+
+.shape-tool-btn.active {
+  color: white;
+}
+
+.shape-cat-btn {
+  flex: 1;
+  padding: 7px 0;
+  border: 2px solid #EEE;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  background: white;
+  color: #888;
+  transition: all 0.2s ease;
+}
+
+.shape-cat-btn.active {
+  background: linear-gradient(135deg, #FFB366, #FF9933);
+  border-color: transparent;
+  color: white;
+}
+
 .brush-size-val {
   color: #999;
   font-size: 11px;

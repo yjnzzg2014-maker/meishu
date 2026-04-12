@@ -14,6 +14,9 @@ class TeacherApp {
     // Face import state
     this.faceImportData = null;
 
+    // Shape import state
+    this.shapeImportData = null;
+
     this.init();
   }
 
@@ -153,6 +156,82 @@ class TeacherApp {
         }
       } catch (e) {
         console.error('Failed to import face:', e);
+      }
+    });
+
+    // --- Shape Import ---
+    const shapeImportBtn = document.getElementById('btn-import-shape');
+    const shapeFileInput = document.getElementById('shape-file-input');
+    const shapeModal = document.getElementById('shape-import-modal');
+
+    if (shapeImportBtn) {
+      shapeImportBtn.addEventListener('click', () => shapeFileInput.click());
+    }
+
+    if (shapeFileInput) {
+      shapeFileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          this.shapeImportData = ev.target.result;
+          const previewArea = document.getElementById('shape-preview-area');
+          if (previewArea) {
+            previewArea.innerHTML = '';
+            const img = document.createElement('img');
+            img.src = this.shapeImportData;
+            img.style.maxWidth = '120px';
+            img.style.maxHeight = '120px';
+            previewArea.appendChild(img);
+          }
+          if (shapeModal) shapeModal.classList.add('visible');
+        };
+        reader.readAsDataURL(file);
+        shapeFileInput.value = '';
+      });
+    }
+
+    // Shape modal controls
+    document.getElementById('shape-modal-close')?.addEventListener('click', () => {
+      shapeModal?.classList.remove('visible');
+    });
+    document.getElementById('shape-modal-cancel')?.addEventListener('click', () => {
+      shapeModal?.classList.remove('visible');
+    });
+
+    // Shape category buttons
+    document.querySelectorAll('.shape-cat-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.shape-cat-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      });
+    });
+
+    // Shape save
+    document.getElementById('shape-modal-save')?.addEventListener('click', async () => {
+      const name = document.getElementById('shape-import-name')?.value.trim();
+      if (!name) { alert('请输入素材名称'); return; }
+      if (!this.shapeImportData) { alert('请选择图片'); return; }
+
+      const activeCat = document.querySelector('.shape-cat-btn.active');
+      const category = activeCat ? activeCat.dataset.cat : 'dots';
+
+      try {
+        const res = await fetch('/api/shapes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, category, imageData: this.shapeImportData })
+        });
+        if (res.ok) {
+          shapeModal?.classList.remove('visible');
+          document.getElementById('shape-import-name').value = '';
+          this.shapeImportData = null;
+          await AssetLoader.reloadCustomAssets();
+          this.renderCustomAssets();
+        }
+      } catch (e) {
+        console.error('Failed to import shape:', e);
       }
     });
   }

@@ -1,4 +1,4 @@
-const SHAPE_SIZE = 80;
+const SHAPE_SIZE = 200;
 
 class StudentApp {
   constructor() {
@@ -15,6 +15,9 @@ class StudentApp {
     this.mode = 'symmetric';
     this.sunSkin = 'cartoon';
     this.locked = false;
+    this.isDisplaying = false;
+    this.displayStudentName = '';
+    this.displayState = null;
     this.breathPhase = 0;
     this.animationId = null;
     this.history = [];
@@ -185,14 +188,21 @@ class StudentApp {
     const maxDist = this.canvasRadius * 0.6;
     const distance = minDist + Math.random() * (maxDist - minDist);
 
-    const radialAngle = angle;
+    const newX = this.centerX + Math.cos(angle) * distance;
+    const newY = this.centerY + Math.sin(angle) * distance;
+
+    // Calculate angle pointing to center (bottom of shape faces center)
+    const toCenterAngle = Math.atan2(this.centerY - newY, this.centerX - newX);
+    // rotationOffset starts at 0, angle is the base pointing-to-center angle
+    const rotationOffset = 0;
 
     const shape = {
       id: Date.now() + '_' + Math.random().toString(36).substr(2, 9),
       type: type,
-      x: this.centerX + Math.cos(angle) * distance,
-      y: this.centerY + Math.sin(angle) * distance,
-      angle: radialAngle,
+      x: newX,
+      y: newY,
+      angle: toCenterAngle,
+      rotationOffset: rotationOffset,
       size: SHAPE_SIZE,
       scale: 1
     };
@@ -222,7 +232,7 @@ class StudentApp {
     let initialPinchDist = 0;
     let initialPinchAngle = 0;
     let shapeInitScale = 1;
-    let shapeInitAngle = 0;
+    let shapeInitRotationOffset = 0;
     let isPinching = false;
 
     this.canvas.addEventListener('pointerdown', (e) => {
@@ -276,6 +286,14 @@ class StudentApp {
       if (this.selectedShape) {
         this.selectedShape.x = x - this.dragOffset.x;
         this.selectedShape.y = y - this.dragOffset.y;
+
+        // Update angle to always point to center (bottom faces center)
+        const toCenterAngle = Math.atan2(
+          this.centerY - this.selectedShape.y,
+          this.centerX - this.selectedShape.x
+        );
+        this.selectedShape.angle = toCenterAngle;
+
         this.throttledSync();
         this.render();
       }
@@ -311,7 +329,7 @@ class StudentApp {
         const target = this.selectedShape || this.selectedFacePart;
         if (target) {
           shapeInitScale = target.scale || 1;
-          shapeInitAngle = target.angle || 0;
+          shapeInitRotationOffset = target.rotationOffset || 0;
         }
       }
     }, { passive: true });
@@ -327,7 +345,10 @@ class StudentApp {
           let newScale = shapeInitScale * (currentDist / initialPinchDist);
           newScale = Math.max(SCALE_LIMITS.min, Math.min(SCALE_LIMITS.max, newScale));
           target.scale = newScale;
-          target.angle = shapeInitAngle + (currentAngle - initialPinchAngle);
+
+          // Update rotation offset (relative to the pointing-to-center base angle)
+          const relativeRotation = currentAngle - initialPinchAngle;
+          target.rotationOffset = shapeInitRotationOffset + relativeRotation;
 
           if (this.selectedFacePart) {
             this.faceMode.constrainToSun(this.selectedFacePart);
@@ -359,13 +380,27 @@ class StudentApp {
   }
 
   findShapeAt(x, y) {
+    // In symmetric mode, check all mirror positions; otherwise just the shape position
     for (let i = this.shapes.length - 1; i >= 0; i--) {
       const shape = this.shapes[i];
       const hitSize = (shape.size * (shape.scale || 1)) / 2 + 15;
-      const dx = x - shape.x;
-      const dy = y - shape.y;
-      if (Math.sqrt(dx * dx + dy * dy) < hitSize) {
-        return shape;
+
+      if (this.mode === 'symmetric') {
+        // Check all 4 mirror positions
+        const mirrors = getMirroredPositions(shape, this.centerX, this.centerY);
+        for (const pos of mirrors) {
+          const dx = x - pos.x;
+          const dy = y - pos.y;
+          if (Math.sqrt(dx * dx + dy * dy) < hitSize) {
+            return shape;
+          }
+        }
+      } else {
+        const dx = x - shape.x;
+        const dy = y - shape.y;
+        if (Math.sqrt(dx * dx + dy * dy) < hitSize) {
+          return shape;
+        }
       }
     }
     return null;
@@ -436,6 +471,7 @@ class StudentApp {
     this.client.on('init_state', (data) => {
       this.mode = data.mode;
       this.locked = data.locked;
+      this.updateLockUI();
       if (data.state) {
         this.shapes = data.state.shapes || [];
         this.faceParts = data.state.faceParts || [];
@@ -461,6 +497,16 @@ class StudentApp {
       await AssetLoader.reloadCustomAssets();
       this.renderShapePanel();
       this.faceMode.renderPanel();
+    });
+
+    // Display broadcast from teacher
+    this.client.on('display_broadcast', (data) => {
+      this.showDisplayModal(data.studentName, data.state);
+    });
+
+    // Display closed by teacher
+    this.client.on('display_closed_by_teacher', () => {
+      this.hideDisplayModal();
     });
   }
 
@@ -495,6 +541,64 @@ class StudentApp {
     const lockOverlay = document.getElementById('lock-overlay');
     if (lockOverlay) {
       lockOverlay.classList.toggle('visible', this.locked);
+    }
+  }
+
+  showDisplayModal(studentName, state) {
+    this.isDisplaying = true;
+    this.displayStudentName = studentName;
+    this.displayState = state;
+
+    const modal = document.getElementById('display-modal');
+    const canvas = document.getElementById('display-canvas');
+
+    // 渲染被展示学生的作品到 display-canvas
+    this.renderDisplayCanvas(canvas, state);
+
+    modal.classList.add('visible');
+    document.getElementById('display-waiting').classList.remove('visible');
+  }
+
+  hideDisplayModal() {
+    this.isDisplaying = false;
+    document.getElementById('display-modal').classList.remove('visible');
+    document.getElementById('display-waiting').classList.add('visible');
+  }
+
+  renderDisplayCanvas(canvas, state) {
+    const ctx = canvas.getContext('2d');
+    const size = 500;
+    canvas.width = size;
+    canvas.height = size;
+    ctx.clearRect(0, 0, size, size);
+
+    if (!state) return;
+
+    // 绘制太阳背景
+    const skin = state.sunSkin || 'default';
+    const skinImg = AssetLoader.get('sun_' + skin);
+    if (skinImg) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(size / 2, size / 2, size / 2 - 10, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(skinImg, 0, 0, size, size);
+      ctx.restore();
+    }
+
+    // 绘制 shapes
+    if (state.shapes) {
+      state.shapes.forEach(shape => {
+        drawShape(ctx, shape, shape.size);
+      });
+    }
+
+    // 绘制 faceParts
+    if (state.faceParts) {
+      const displaySunR = size / 2 * SUN_CONFIG.personifyRadiusRatio;
+      state.faceParts.forEach(part => {
+        drawFacePart(ctx, part, size / 2, size / 2, displaySunR);
+      });
     }
   }
 

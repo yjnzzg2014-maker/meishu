@@ -15,7 +15,9 @@ class SocketClient {
       'student_updated', 'student_state', 'student_list',
       'students_summary',
       // Asset sync
-      'assets_updated'
+      'assets_updated',
+      // Display broadcast
+      'display_broadcast', 'display_closed_by_teacher'
     ];
 
     events.forEach(event => {

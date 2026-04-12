@@ -42,6 +42,64 @@
       </div>
     </div>
 
+    <!-- Asset Management Section -->
+    <div id="asset-section" class="teacher-section">
+      <div class="section-header">
+        <h2>素材管理</h2>
+        <div class="section-actions">
+          <button id="btn-draw-shape" class="action-btn">绘制素材</button>
+          <button id="btn-import-face" class="action-btn accent">导入五官</button>
+          <input type="file" id="face-file-input" accept="image/*" style="display:none">
+        </div>
+      </div>
+
+      <!-- Custom shapes list -->
+      <div id="custom-assets-area">
+        <div class="asset-group">
+          <h3>自定义素材 (点/线)</h3>
+          <div id="custom-shapes-grid" class="asset-grid"></div>
+          <p id="no-custom-shapes" class="empty-hint">暂无自定义素材，点击"绘制素材"添加</p>
+        </div>
+        <div class="asset-group">
+          <h3>自定义五官</h3>
+          <div id="custom-faces-grid" class="asset-grid"></div>
+          <p id="no-custom-faces" class="empty-hint">暂无自定义五官，点击"导入五官"添加</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Face import modal -->
+    <div id="face-import-modal" class="draw-modal">
+      <div class="draw-modal-content" style="max-width:400px">
+        <div class="draw-modal-header">
+          <h3>导入五官素材</h3>
+          <button class="draw-close-btn" id="face-modal-close">&times;</button>
+        </div>
+        <div class="draw-body" style="flex-direction:column;align-items:center;gap:16px;padding:20px">
+          <div id="face-preview-area" class="face-preview-area">
+            <p>点击选择图片</p>
+          </div>
+          <div class="draw-field" style="width:100%">
+            <label>名称</label>
+            <input type="text" id="face-import-name" class="draw-name-input" placeholder="五官名称" maxlength="10">
+          </div>
+          <div class="draw-field" style="width:100%">
+            <label>分类</label>
+            <div class="draw-category-btns">
+              <button class="face-cat-btn active" data-cat="eyes">眼睛</button>
+              <button class="face-cat-btn" data-cat="noses">鼻子</button>
+              <button class="face-cat-btn" data-cat="mouths">嘴巴</button>
+              <button class="face-cat-btn" data-cat="extras">其他</button>
+            </div>
+          </div>
+        </div>
+        <div class="draw-modal-footer">
+          <button class="draw-cancel-btn" id="face-modal-cancel">取消</button>
+          <button class="draw-save-btn" id="face-modal-save">导入</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Student grid -->
     <div id="student-section">
       <h2>学生作品</h2>
@@ -64,6 +122,7 @@
   <script src="js/constants.js"></script>
   <script src="js/asset-loader.js"></script>
   <script src="js/canvas-utils.js"></script>
+  <script src="js/draw-tool.js"></script>
   <script src="js/socket-client.js"></script>
   <script src="js/teacher.js"></script>
 </body>

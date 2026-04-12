@@ -1,5 +1,5 @@
-// Asset loader - generates placeholder assets via Canvas
-// Replace generated images with PNGs by placing files in public/assets/ and updating paths
+// Asset loader - loads PNG assets with Canvas fallback for face parts
+// Supports custom assets from server and tint color caching
 
 const AssetLoader = {
   cache: {},
@@ -8,15 +8,43 @@ const AssetLoader = {
   async loadAll() {
     await Promise.all([
       this.generateSunSkins(),
-      this.generateShapeAssets(),
+      this.loadShapeAssets(),
       this.generateFaceAssets()
     ]);
+    // Load custom assets from server
+    await this.loadCustomAssets();
     this.ready = true;
   },
 
-  // Get a cached asset image
   get(key) {
     return this.cache[key] || null;
+  },
+
+  // Get a tinted version of a cached asset (cached automatically)
+  getTinted(key, color) {
+    const cacheKey = `${key}_tint_${color}`;
+    if (this.cache[cacheKey]) return this.cache[cacheKey];
+
+    const original = this.cache[key];
+    if (!original) return null;
+
+    const c = this.createCanvas(original.width, original.height);
+    const ctx = c.getContext('2d');
+    ctx.drawImage(original, 0, 0);
+    ctx.globalCompositeOperation = 'source-atop';
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, c.width, c.height);
+
+    this.cache[cacheKey] = c;
+    return c;
+  },
+
+  // Clear tint cache entries (call when custom assets change)
+  clearTintCache() {
+    const keys = Object.keys(this.cache);
+    keys.forEach(key => {
+      if (key.includes('_tint_')) delete this.cache[key];
+    });
   },
 
   createCanvas(w, h) {
@@ -29,15 +57,12 @@ const AssetLoader = {
   // --- Sun Skins ---
   async generateSunSkins() {
     for (const skin of SUN_SKINS) {
-      // If skin has an image path, load the actual image
       if (skin.imagePath) {
         const img = await this.loadImage(skin.imagePath, skin.makeWhiteTransparent);
         if (img) {
-          // Scale to standard size (400x400)
           const size = 400;
           const c = this.createCanvas(size, size);
           const ctx = c.getContext('2d');
-          // Draw image scaled to fit
           const scale = Math.min(size / img.width, size / img.height);
           const w = img.width * scale;
           const h = img.height * scale;
@@ -54,7 +79,6 @@ const AssetLoader = {
       const ctx = c.getContext('2d');
       const cx = size / 2, cy = size / 2, r = size * 0.35;
 
-      // Glow
       const glow = ctx.createRadialGradient(cx, cy, r * 0.3, cx, cy, size / 2);
       glow.addColorStop(0, skin.glowColor + 'AA');
       glow.addColorStop(0.6, skin.glowColor + '44');
@@ -62,7 +86,6 @@ const AssetLoader = {
       ctx.fillStyle = glow;
       ctx.fillRect(0, 0, size, size);
 
-      // Rays
       ctx.fillStyle = skin.rayColor;
       const rayCount = 12;
       for (let i = 0; i < rayCount; i++) {
@@ -80,7 +103,6 @@ const AssetLoader = {
         ctx.restore();
       }
 
-      // Body
       const bodyGrad = ctx.createRadialGradient(cx - r * 0.25, cy - r * 0.25, 0, cx, cy, r);
       bodyGrad.addColorStop(0, lightenColor(skin.baseColor, 40));
       bodyGrad.addColorStop(0.7, skin.baseColor);
@@ -90,7 +112,6 @@ const AssetLoader = {
       ctx.arc(cx, cy, r, 0, Math.PI * 2);
       ctx.fill();
 
-      // Default face
       ctx.fillStyle = skin.faceColor;
       ctx.beginPath();
       ctx.arc(cx - r * 0.25, cy - r * 0.1, r * 0.08, 0, Math.PI * 2);
@@ -111,7 +132,6 @@ const AssetLoader = {
       const img = new Image();
       img.onload = () => {
         if (makeWhiteTransparent) {
-          // Convert white background to transparent
           const canvas = document.createElement('canvas');
           canvas.width = img.width;
           canvas.height = img.height;
@@ -120,7 +140,6 @@ const AssetLoader = {
           const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
           const data = imageData.data;
           for (let i = 0; i < data.length; i += 4) {
-            // If pixel is mostly white (R>240, G>240, B>240), make it transparent
             if (data[i] > 240 && data[i + 1] > 240 && data[i + 2] > 240) {
               data[i + 3] = 0;
             }
@@ -138,448 +157,227 @@ const AssetLoader = {
     });
   },
 
-  // --- Shape Assets ---
-  async generateShapeAssets() {
-    const size = 120;
-    const colorKeys = Object.keys(COLORS.shapes);
-
-    for (const shape of SHAPES) {
-      for (const colorKey of colorKeys) {
-        const c = this.createCanvas(size, size);
-        const ctx = c.getContext('2d');
-        const color = COLORS.shapes[colorKey];
-
-        ctx.translate(size / 2, size / 2);
-        this._drawShapeGraphic(ctx, shape.id, size * 0.8, color);
-
-        this.cache[`shape_${shape.id}_${colorKey}`] = c;
-      }
-    }
+  // --- Shape Assets (PNG-based) ---
+  async loadShapeAssets() {
+    const loadPromises = SHAPES.map(async (shape) => {
+      await this._loadShapeEntry(shape);
+    });
+    await Promise.all(loadPromises);
   },
 
-  _drawShapeGraphic(ctx, type, size, color) {
-    const half = size / 2;
-    ctx.fillStyle = color;
-
-    switch (type) {
-      case 'circle':
-        ctx.beginPath();
-        ctx.arc(0, 0, half, 0, Math.PI * 2);
-        ctx.fill();
-        // Inner highlight
-        ctx.fillStyle = 'rgba(255,255,255,0.3)';
-        ctx.beginPath();
-        ctx.arc(-half * 0.2, -half * 0.2, half * 0.4, 0, Math.PI * 2);
-        ctx.fill();
-        break;
-
-      case 'triangle':
-        ctx.beginPath();
-        ctx.moveTo(0, -half);
-        ctx.lineTo(half, half * 0.7);
-        ctx.lineTo(-half, half * 0.7);
-        ctx.closePath();
-        ctx.fill();
-        ctx.fillStyle = 'rgba(255,255,255,0.2)';
-        ctx.beginPath();
-        ctx.moveTo(0, -half * 0.5);
-        ctx.lineTo(half * 0.4, half * 0.2);
-        ctx.lineTo(-half * 0.4, half * 0.2);
-        ctx.closePath();
-        ctx.fill();
-        break;
-
-      case 'square': {
-        const s = half * 0.85;
-        const r = 10;
-        ctx.beginPath();
-        ctx.moveTo(-s + r, -s);
-        ctx.lineTo(s - r, -s);
-        ctx.quadraticCurveTo(s, -s, s, -s + r);
-        ctx.lineTo(s, s - r);
-        ctx.quadraticCurveTo(s, s, s - r, s);
-        ctx.lineTo(-s + r, s);
-        ctx.quadraticCurveTo(-s, s, -s, s - r);
-        ctx.lineTo(-s, -s + r);
-        ctx.quadraticCurveTo(-s, -s, -s + r, -s);
-        ctx.closePath();
-        ctx.fill();
-        break;
-      }
-
-      case 'rectangle': {
-        const w = half, h = half * 0.65;
-        const r = 8;
-        ctx.beginPath();
-        ctx.moveTo(-w + r, -h);
-        ctx.lineTo(w - r, -h);
-        ctx.quadraticCurveTo(w, -h, w, -h + r);
-        ctx.lineTo(w, h - r);
-        ctx.quadraticCurveTo(w, h, w - r, h);
-        ctx.lineTo(-w + r, h);
-        ctx.quadraticCurveTo(-w, h, -w, h - r);
-        ctx.lineTo(-w, -h + r);
-        ctx.quadraticCurveTo(-w, -h, -w + r, -h);
-        ctx.closePath();
-        ctx.fill();
-        break;
-      }
-
-      case 'flower': {
-        const petalR = half * 0.35;
-        const petalCount = 6;
-        for (let i = 0; i < petalCount; i++) {
-          ctx.save();
-          ctx.rotate(i * Math.PI / 3);
-          ctx.beginPath();
-          ctx.ellipse(0, -petalR * 1.1, petalR * 0.6, petalR, 0, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.restore();
-        }
-        ctx.fillStyle = '#FFE066';
-        ctx.beginPath();
-        ctx.arc(0, 0, half * 0.22, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = 'rgba(255,255,255,0.3)';
-        ctx.beginPath();
-        ctx.arc(-half * 0.05, -half * 0.05, half * 0.12, 0, Math.PI * 2);
-        ctx.fill();
-        break;
-      }
-
-      case 'leaf':
-        ctx.beginPath();
-        ctx.moveTo(0, -half * 0.8);
-        ctx.quadraticCurveTo(half * 0.9, -half * 0.3, half * 0.7, half * 0.5);
-        ctx.quadraticCurveTo(0, half * 0.9, -half * 0.7, half * 0.5);
-        ctx.quadraticCurveTo(-half * 0.9, -half * 0.3, 0, -half * 0.8);
-        ctx.fill();
-        ctx.strokeStyle = darkenColor(color, 30);
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(0, -half * 0.7);
-        ctx.lineTo(0, half * 0.6);
-        ctx.stroke();
-        // Leaf veins
-        for (let i = 1; i <= 3; i++) {
-          const y = -half * 0.3 + i * half * 0.25;
-          ctx.beginPath();
-          ctx.moveTo(0, y);
-          ctx.lineTo(half * 0.3 * (1 - i * 0.15), y + half * 0.1);
-          ctx.moveTo(0, y);
-          ctx.lineTo(-half * 0.3 * (1 - i * 0.15), y + half * 0.1);
-          ctx.stroke();
-        }
-        break;
-
-      case 'star': {
-        ctx.beginPath();
-        for (let i = 0; i < 10; i++) {
-          const r2 = i % 2 === 0 ? half : half * 0.4;
-          const a = (i * Math.PI / 5) - Math.PI / 2;
-          const x = Math.cos(a) * r2;
-          const y = Math.sin(a) * r2;
-          if (i === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
-        }
-        ctx.closePath();
-        ctx.fill();
-        ctx.fillStyle = 'rgba(255,255,255,0.25)';
-        ctx.beginPath();
-        for (let i = 0; i < 10; i++) {
-          const r2 = i % 2 === 0 ? half * 0.5 : half * 0.2;
-          const a = (i * Math.PI / 5) - Math.PI / 2;
-          const x = Math.cos(a) * r2 - half * 0.1;
-          const y = Math.sin(a) * r2 - half * 0.1;
-          if (i === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
-        }
-        ctx.closePath();
-        ctx.fill();
-        break;
-      }
-
-      case 'cloud':
-        ctx.beginPath();
-        ctx.arc(-half * 0.25, half * 0.05, half * 0.35, 0, Math.PI * 2);
-        ctx.arc(half * 0.15, -half * 0.1, half * 0.4, 0, Math.PI * 2);
-        ctx.arc(half * 0.45, half * 0.05, half * 0.3, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = 'rgba(255,255,255,0.3)';
-        ctx.beginPath();
-        ctx.arc(-half * 0.15, -half * 0.15, half * 0.2, 0, Math.PI * 2);
-        ctx.fill();
-        break;
-
-      case 'bird':
-        ctx.strokeStyle = color;
-        ctx.fillStyle = 'transparent';
-        ctx.lineWidth = 5;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(-half * 0.6, 0);
-        ctx.quadraticCurveTo(-half * 0.15, -half * 0.5, half * 0.3, 0);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(half * 0.3, 0);
-        ctx.quadraticCurveTo(half * 0.6, -half * 0.35, half * 0.8, -half * 0.1);
-        ctx.stroke();
-        // Eye dot
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.arc(half * 0.35, -half * 0.08, 3, 0, Math.PI * 2);
-        ctx.fill();
-        break;
+  async _loadShapeEntry(shape) {
+    const img = await this.loadImage(shape.src);
+    if (img) {
+      const size = 120;
+      const c = this.createCanvas(size, size);
+      const ctx = c.getContext('2d');
+      const scale = Math.min(size / img.width, size / img.height);
+      const w = img.width * scale;
+      const h = img.height * scale;
+      ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+      this.cache[`shape_${shape.id}`] = c;
     }
   },
 
   // --- Face Part Assets ---
   async generateFaceAssets() {
     const size = 100;
-
-    // Eyes
-    this._genFace('eyes_round', size, (ctx, s) => {
-      const gap = s * 0.25;
-      ctx.fillStyle = '#3D2B1F';
-      ctx.beginPath();
-      ctx.arc(-gap, 0, s * 0.12, 0, Math.PI * 2);
-      ctx.arc(gap, 0, s * 0.12, 0, Math.PI * 2);
-      ctx.fill();
-      // Highlights
-      ctx.fillStyle = 'white';
-      ctx.beginPath();
-      ctx.arc(-gap + 3, -3, s * 0.04, 0, Math.PI * 2);
-      ctx.arc(gap + 3, -3, s * 0.04, 0, Math.PI * 2);
-      ctx.fill();
-    });
-
-    this._genFace('eyes_happy', size, (ctx, s) => {
-      const gap = s * 0.25;
-      ctx.strokeStyle = '#3D2B1F';
-      ctx.lineWidth = 4;
-      ctx.lineCap = 'round';
-      [-gap, gap].forEach(x => {
-        ctx.beginPath();
-        ctx.arc(x, 3, s * 0.1, -Math.PI * 0.9, -Math.PI * 0.1);
-        ctx.stroke();
-      });
-    });
-
-    this._genFace('eyes_star', size, (ctx, s) => {
-      const gap = s * 0.25;
-      ctx.fillStyle = '#3D2B1F';
-      [-gap, gap].forEach(cx => {
-        ctx.save();
-        ctx.translate(cx, 0);
-        ctx.beginPath();
-        for (let i = 0; i < 10; i++) {
-          const r = i % 2 === 0 ? s * 0.13 : s * 0.06;
-          const a = (i * Math.PI / 5) - Math.PI / 2;
-          ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+    for (const catId of Object.keys(FACE_PARTS)) {
+      for (const part of FACE_PARTS[catId]) {
+        if (part.src) {
+          await this._loadFaceEntry(part, size);
+        } else {
+          this._genFaceCanvas(part.id, size);
         }
-        ctx.closePath();
-        ctx.fill();
-        ctx.restore();
-      });
-    });
-
-    this._genFace('eyes_wink', size, (ctx, s) => {
-      const gap = s * 0.25;
-      // Left eye open
-      ctx.fillStyle = '#3D2B1F';
-      ctx.beginPath();
-      ctx.arc(-gap, 0, s * 0.12, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = 'white';
-      ctx.beginPath();
-      ctx.arc(-gap + 3, -3, s * 0.04, 0, Math.PI * 2);
-      ctx.fill();
-      // Right eye winking
-      ctx.strokeStyle = '#3D2B1F';
-      ctx.lineWidth = 4;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(gap - s * 0.1, 0);
-      ctx.lineTo(gap + s * 0.1, 0);
-      ctx.stroke();
-    });
-
-    this._genFace('eyes_sleepy', size, (ctx, s) => {
-      const gap = s * 0.25;
-      ctx.strokeStyle = '#3D2B1F';
-      ctx.lineWidth = 4;
-      ctx.lineCap = 'round';
-      [-gap, gap].forEach(x => {
-        ctx.beginPath();
-        ctx.moveTo(x - s * 0.1, 0);
-        ctx.lineTo(x + s * 0.1, 0);
-        ctx.stroke();
-      });
-    });
-
-    // Noses
-    this._genFace('nose_dot', size, (ctx, s) => {
-      ctx.fillStyle = '#D4A056';
-      ctx.beginPath();
-      ctx.arc(0, 0, s * 0.06, 0, Math.PI * 2);
-      ctx.fill();
-    });
-
-    this._genFace('nose_triangle', size, (ctx, s) => {
-      ctx.fillStyle = '#D4A056';
-      ctx.beginPath();
-      ctx.moveTo(0, -s * 0.06);
-      ctx.lineTo(s * 0.06, s * 0.06);
-      ctx.lineTo(-s * 0.06, s * 0.06);
-      ctx.closePath();
-      ctx.fill();
-    });
-
-    this._genFace('nose_button', size, (ctx, s) => {
-      ctx.strokeStyle = '#D4A056';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(0, 0, s * 0.06, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.fillStyle = '#D4A056';
-      ctx.beginPath();
-      ctx.arc(-s * 0.02, 0, 2, 0, Math.PI * 2);
-      ctx.arc(s * 0.02, 0, 2, 0, Math.PI * 2);
-      ctx.fill();
-    });
-
-    // Mouths
-    this._genFace('mouth_smile', size, (ctx, s) => {
-      ctx.strokeStyle = '#C0392B';
-      ctx.lineWidth = 4;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.arc(0, -s * 0.05, s * 0.15, 0.15 * Math.PI, 0.85 * Math.PI);
-      ctx.stroke();
-    });
-
-    this._genFace('mouth_laugh', size, (ctx, s) => {
-      ctx.fillStyle = '#C0392B';
-      ctx.beginPath();
-      ctx.arc(0, -s * 0.03, s * 0.15, 0.05 * Math.PI, 0.95 * Math.PI);
-      ctx.closePath();
-      ctx.fill();
-      // Tongue
-      ctx.fillStyle = '#E74C3C';
-      ctx.beginPath();
-      ctx.arc(0, s * 0.08, s * 0.08, 0, Math.PI);
-      ctx.fill();
-    });
-
-    this._genFace('mouth_kiss', size, (ctx, s) => {
-      ctx.fillStyle = '#E74C3C';
-      ctx.beginPath();
-      ctx.arc(0, 0, s * 0.08, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#C0392B';
-      ctx.beginPath();
-      ctx.arc(0, 0, s * 0.04, 0, Math.PI * 2);
-      ctx.fill();
-    });
-
-    this._genFace('mouth_surprised', size, (ctx, s) => {
-      ctx.fillStyle = '#C0392B';
-      ctx.beginPath();
-      ctx.ellipse(0, 0, s * 0.1, s * 0.13, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#2C1810';
-      ctx.beginPath();
-      ctx.ellipse(0, 0, s * 0.06, s * 0.09, 0, 0, Math.PI * 2);
-      ctx.fill();
-    });
-
-    this._genFace('mouth_tongue', size, (ctx, s) => {
-      ctx.strokeStyle = '#C0392B';
-      ctx.lineWidth = 4;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.arc(0, -s * 0.05, s * 0.15, 0.15 * Math.PI, 0.85 * Math.PI);
-      ctx.stroke();
-      ctx.fillStyle = '#E74C3C';
-      ctx.beginPath();
-      ctx.arc(0, s * 0.1, s * 0.07, 0, Math.PI);
-      ctx.fill();
-    });
-
-    // Extras
-    this._genFace('extra_blush', size, (ctx, s) => {
-      const gap = s * 0.3;
-      ctx.fillStyle = 'rgba(255, 150, 150, 0.5)';
-      ctx.beginPath();
-      ctx.ellipse(-gap, 0, s * 0.1, s * 0.07, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.ellipse(gap, 0, s * 0.1, s * 0.07, 0, 0, Math.PI * 2);
-      ctx.fill();
-    });
-
-    this._genFace('extra_eyebrows_happy', size, (ctx, s) => {
-      const gap = s * 0.25;
-      ctx.strokeStyle = '#5D4037';
-      ctx.lineWidth = 4;
-      ctx.lineCap = 'round';
-      [-gap, gap].forEach(x => {
-        ctx.beginPath();
-        ctx.arc(x, s * 0.08, s * 0.12, -Math.PI * 0.85, -Math.PI * 0.15);
-        ctx.stroke();
-      });
-    });
-
-    this._genFace('extra_eyebrows_angry', size, (ctx, s) => {
-      const gap = s * 0.25;
-      ctx.strokeStyle = '#5D4037';
-      ctx.lineWidth = 4;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(-gap - s * 0.1, -s * 0.06);
-      ctx.lineTo(-gap + s * 0.1, s * 0.02);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(gap + s * 0.1, -s * 0.06);
-      ctx.lineTo(gap - s * 0.1, s * 0.02);
-      ctx.stroke();
-    });
-
-    this._genFace('extra_freckles', size, (ctx, s) => {
-      ctx.fillStyle = '#D4A056';
-      const spots = [[-0.15, -0.05], [-0.1, 0.05], [-0.2, 0.05], [0.15, -0.05], [0.1, 0.05], [0.2, 0.05]];
-      spots.forEach(([x, y]) => {
-        ctx.beginPath();
-        ctx.arc(x * s, y * s, 2.5, 0, Math.PI * 2);
-        ctx.fill();
-      });
-    });
-
-    this._genFace('extra_glasses', size, (ctx, s) => {
-      const gap = s * 0.25;
-      ctx.strokeStyle = '#5D4037';
-      ctx.lineWidth = 3;
-      [-gap, gap].forEach(x => {
-        ctx.beginPath();
-        ctx.arc(x, 0, s * 0.13, 0, Math.PI * 2);
-        ctx.stroke();
-      });
-      // Bridge
-      ctx.beginPath();
-      ctx.moveTo(-gap + s * 0.13, 0);
-      ctx.lineTo(gap - s * 0.13, 0);
-      ctx.stroke();
-      // Temples
-      ctx.beginPath();
-      ctx.moveTo(-gap - s * 0.13, 0);
-      ctx.lineTo(-gap - s * 0.2, -s * 0.03);
-      ctx.moveTo(gap + s * 0.13, 0);
-      ctx.lineTo(gap + s * 0.2, -s * 0.03);
-      ctx.stroke();
-    });
+      }
+    }
   },
 
-  _genFace(id, size, drawFn) {
+  async _loadFaceEntry(part, size) {
+    const img = await this.loadImage(part.src);
+    if (img) {
+      size = size || 100;
+      const c = this.createCanvas(size, size);
+      const ctx = c.getContext('2d');
+      const scale = Math.min(size / img.width, size / img.height);
+      const w = img.width * scale;
+      const h = img.height * scale;
+      ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+      this.cache['face_' + part.id] = c;
+    }
+  },
+
+  // --- Custom Assets from Server ---
+  async loadCustomAssets() {
+    try {
+      const res = await fetch('/api/custom-assets');
+      const data = await res.json();
+
+      // Load custom shapes
+      if (data.shapes && data.shapes.length) {
+        for (const shape of data.shapes) {
+          // Add to SHAPES array if not already there
+          if (!SHAPES.find(s => s.id === shape.id)) {
+            SHAPES.push(shape);
+          }
+          await this._loadShapeEntry(shape);
+        }
+      }
+
+      // Load custom face parts
+      if (data.faces && data.faces.length) {
+        for (const face of data.faces) {
+          const cat = face.category;
+          if (!FACE_PARTS[cat]) FACE_PARTS[cat] = [];
+          if (!FACE_PARTS[cat].find(f => f.id === face.id)) {
+            FACE_PARTS[cat].push(face);
+          }
+          await this._loadFaceEntry(face, 100);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load custom assets:', e.message);
+    }
+  },
+
+  // Reload custom assets (called when assets_updated event fires)
+  async reloadCustomAssets() {
+    this.clearTintCache();
+    try {
+      const res = await fetch('/api/custom-assets');
+      const data = await res.json();
+
+      // Remove old custom entries from SHAPES
+      for (let i = SHAPES.length - 1; i >= 0; i--) {
+        if (SHAPES[i].custom) SHAPES.splice(i, 1);
+      }
+      // Remove old custom entries from FACE_PARTS
+      for (const catId of Object.keys(FACE_PARTS)) {
+        FACE_PARTS[catId] = FACE_PARTS[catId].filter(f => !f.custom);
+      }
+
+      // Re-add from server
+      if (data.shapes) {
+        for (const shape of data.shapes) {
+          SHAPES.push(shape);
+          await this._loadShapeEntry(shape);
+        }
+      }
+      if (data.faces) {
+        for (const face of data.faces) {
+          const cat = face.category;
+          if (!FACE_PARTS[cat]) FACE_PARTS[cat] = [];
+          FACE_PARTS[cat].push(face);
+          await this._loadFaceEntry(face, 100);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to reload custom assets:', e.message);
+    }
+  },
+
+  _genFaceCanvas(id, size) {
+    const drawFns = {
+      eyes_round: (ctx, s) => {
+        const gap = s * 0.25;
+        ctx.fillStyle = '#3D2B1F';
+        ctx.beginPath(); ctx.arc(-gap, 0, s * 0.12, 0, Math.PI * 2); ctx.arc(gap, 0, s * 0.12, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'white';
+        ctx.beginPath(); ctx.arc(-gap + 3, -3, s * 0.04, 0, Math.PI * 2); ctx.arc(gap + 3, -3, s * 0.04, 0, Math.PI * 2); ctx.fill();
+      },
+      eyes_happy: (ctx, s) => {
+        const gap = s * 0.25;
+        ctx.strokeStyle = '#3D2B1F'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+        [-gap, gap].forEach(x => { ctx.beginPath(); ctx.arc(x, 3, s * 0.1, -Math.PI * 0.9, -Math.PI * 0.1); ctx.stroke(); });
+      },
+      eyes_star: (ctx, s) => {
+        const gap = s * 0.25;
+        ctx.fillStyle = '#3D2B1F';
+        [-gap, gap].forEach(cx => {
+          ctx.save(); ctx.translate(cx, 0); ctx.beginPath();
+          for (let i = 0; i < 10; i++) { const r = i % 2 === 0 ? s * 0.13 : s * 0.06; const a = (i * Math.PI / 5) - Math.PI / 2; ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r); }
+          ctx.closePath(); ctx.fill(); ctx.restore();
+        });
+      },
+      eyes_wink: (ctx, s) => {
+        const gap = s * 0.25;
+        ctx.fillStyle = '#3D2B1F'; ctx.beginPath(); ctx.arc(-gap, 0, s * 0.12, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'white'; ctx.beginPath(); ctx.arc(-gap + 3, -3, s * 0.04, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#3D2B1F'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(gap - s * 0.1, 0); ctx.lineTo(gap + s * 0.1, 0); ctx.stroke();
+      },
+      eyes_sleepy: (ctx, s) => {
+        const gap = s * 0.25;
+        ctx.strokeStyle = '#3D2B1F'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+        [-gap, gap].forEach(x => { ctx.beginPath(); ctx.moveTo(x - s * 0.1, 0); ctx.lineTo(x + s * 0.1, 0); ctx.stroke(); });
+      },
+      nose_dot: (ctx, s) => { ctx.fillStyle = '#D4A056'; ctx.beginPath(); ctx.arc(0, 0, s * 0.06, 0, Math.PI * 2); ctx.fill(); },
+      nose_triangle: (ctx, s) => {
+        ctx.fillStyle = '#D4A056'; ctx.beginPath();
+        ctx.moveTo(0, -s * 0.06); ctx.lineTo(s * 0.06, s * 0.06); ctx.lineTo(-s * 0.06, s * 0.06);
+        ctx.closePath(); ctx.fill();
+      },
+      nose_button: (ctx, s) => {
+        ctx.strokeStyle = '#D4A056'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, 0, s * 0.06, 0, Math.PI * 2); ctx.stroke();
+        ctx.fillStyle = '#D4A056'; ctx.beginPath(); ctx.arc(-s * 0.02, 0, 2, 0, Math.PI * 2); ctx.arc(s * 0.02, 0, 2, 0, Math.PI * 2); ctx.fill();
+      },
+      mouth_smile: (ctx, s) => {
+        ctx.strokeStyle = '#C0392B'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.arc(0, -s * 0.05, s * 0.15, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+      },
+      mouth_laugh: (ctx, s) => {
+        ctx.fillStyle = '#C0392B'; ctx.beginPath(); ctx.arc(0, -s * 0.03, s * 0.15, 0.05 * Math.PI, 0.95 * Math.PI); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#E74C3C'; ctx.beginPath(); ctx.arc(0, s * 0.08, s * 0.08, 0, Math.PI); ctx.fill();
+      },
+      mouth_kiss: (ctx, s) => {
+        ctx.fillStyle = '#E74C3C'; ctx.beginPath(); ctx.arc(0, 0, s * 0.08, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#C0392B'; ctx.beginPath(); ctx.arc(0, 0, s * 0.04, 0, Math.PI * 2); ctx.fill();
+      },
+      mouth_surprised: (ctx, s) => {
+        ctx.fillStyle = '#C0392B'; ctx.beginPath(); ctx.ellipse(0, 0, s * 0.1, s * 0.13, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#2C1810'; ctx.beginPath(); ctx.ellipse(0, 0, s * 0.06, s * 0.09, 0, 0, Math.PI * 2); ctx.fill();
+      },
+      mouth_tongue: (ctx, s) => {
+        ctx.strokeStyle = '#C0392B'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.arc(0, -s * 0.05, s * 0.15, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+        ctx.fillStyle = '#E74C3C'; ctx.beginPath(); ctx.arc(0, s * 0.1, s * 0.07, 0, Math.PI); ctx.fill();
+      },
+      extra_blush: (ctx, s) => {
+        const gap = s * 0.3;
+        ctx.fillStyle = 'rgba(255, 150, 150, 0.5)';
+        ctx.beginPath(); ctx.ellipse(-gap, 0, s * 0.1, s * 0.07, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(gap, 0, s * 0.1, s * 0.07, 0, 0, Math.PI * 2); ctx.fill();
+      },
+      extra_eyebrows_happy: (ctx, s) => {
+        const gap = s * 0.25;
+        ctx.strokeStyle = '#5D4037'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+        [-gap, gap].forEach(x => { ctx.beginPath(); ctx.arc(x, s * 0.08, s * 0.12, -Math.PI * 0.85, -Math.PI * 0.15); ctx.stroke(); });
+      },
+      extra_eyebrows_angry: (ctx, s) => {
+        const gap = s * 0.25;
+        ctx.strokeStyle = '#5D4037'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(-gap - s * 0.1, -s * 0.06); ctx.lineTo(-gap + s * 0.1, s * 0.02); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(gap + s * 0.1, -s * 0.06); ctx.lineTo(gap - s * 0.1, s * 0.02); ctx.stroke();
+      },
+      extra_freckles: (ctx, s) => {
+        ctx.fillStyle = '#D4A056';
+        [[-0.15, -0.05], [-0.1, 0.05], [-0.2, 0.05], [0.15, -0.05], [0.1, 0.05], [0.2, 0.05]].forEach(([x, y]) => {
+          ctx.beginPath(); ctx.arc(x * s, y * s, 2.5, 0, Math.PI * 2); ctx.fill();
+        });
+      },
+      extra_glasses: (ctx, s) => {
+        const gap = s * 0.25;
+        ctx.strokeStyle = '#5D4037'; ctx.lineWidth = 3;
+        [-gap, gap].forEach(x => { ctx.beginPath(); ctx.arc(x, 0, s * 0.13, 0, Math.PI * 2); ctx.stroke(); });
+        ctx.beginPath(); ctx.moveTo(-gap + s * 0.13, 0); ctx.lineTo(gap - s * 0.13, 0); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-gap - s * 0.13, 0); ctx.lineTo(-gap - s * 0.2, -s * 0.03);
+        ctx.moveTo(gap + s * 0.13, 0); ctx.lineTo(gap + s * 0.2, -s * 0.03); ctx.stroke();
+      }
+    };
+
+    const drawFn = drawFns[id];
+    if (!drawFn) return;
+
     const c = this.createCanvas(size, size);
     const ctx = c.getContext('2d');
     ctx.translate(size / 2, size / 2);

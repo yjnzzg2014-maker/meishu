@@ -17,20 +17,25 @@ class StudentApp {
     this.locked = false;
     this.breathPhase = 0;
     this.animationId = null;
-    this.history = []; // For undo
-    this.activeShapeCategory = 'geometry';
+    this.history = [];
+    this.activeShapeCategory = 'dots';
+    this.selectedTintColor = null; // Current tint color selection
+
+    // Throttle state
+    this._syncTimer = null;
+    this._syncPending = false;
 
     this.faceMode = new FaceMode(this);
   }
 
   async init() {
-    // Load assets first
     const loader = document.getElementById('loader');
     await AssetLoader.loadAll();
     if (loader) loader.style.display = 'none';
 
     this.setupCanvas();
     this.renderShapePanel();
+    this.renderColorPalette();
     this.setupSkinSelector();
     this.setupToolbar();
     this.setupTouchHandlers();
@@ -67,10 +72,7 @@ class StudentApp {
       item.className = 'shape-item';
       item.dataset.shapeId = shape.id;
 
-      const colors = Object.keys(COLORS.shapes);
-      const color = colors[Math.floor(Math.random() * colors.length)];
-
-      const img = AssetLoader.get(`shape_${shape.id}_${color}`);
+      const img = AssetLoader.get(`shape_${shape.id}`);
       if (img) {
         const preview = document.createElement('canvas');
         preview.width = 56;
@@ -87,6 +89,31 @@ class StudentApp {
 
       item.addEventListener('click', () => this.addShape(shape.id));
       container.appendChild(item);
+    });
+  }
+
+  renderColorPalette() {
+    const container = document.getElementById('color-palette');
+    if (!container) return;
+    container.innerHTML = '';
+
+    TINT_COLORS.forEach((color, idx) => {
+      const swatch = document.createElement('button');
+      swatch.className = 'color-swatch' + (color === this.selectedTintColor ? ' active' : '');
+      if (color) {
+        swatch.style.background = color;
+      } else {
+        // No-tint swatch: show as white with a cross pattern
+        swatch.classList.add('no-tint');
+      }
+
+      swatch.addEventListener('click', () => {
+        this.selectedTintColor = color;
+        container.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+        swatch.classList.add('active');
+      });
+
+      container.appendChild(swatch);
     });
   }
 
@@ -146,24 +173,18 @@ class StudentApp {
       clearBtn.addEventListener('click', () => this.clearAll());
     }
 
-    // Category tabs
     this.setupCategoryTabs();
   }
 
   addShape(type) {
     if (this.locked) return;
 
-    const colors = Object.keys(COLORS.shapes);
-    const color = colors[Math.floor(Math.random() * colors.length)];
-
-    // Place near sun at random radial position
     const angle = Math.random() * Math.PI * 2;
-    const sunR = getSunRadius(this.canvasRadius);
+    const sunR = getSunRadius(this.canvasRadius, this.mode);
     const minDist = sunR + SHAPE_SIZE;
     const maxDist = this.canvasRadius * 0.6;
     const distance = minDist + Math.random() * (maxDist - minDist);
 
-    // Radial angle: angle from sun center to placement point
     const radialAngle = angle;
 
     const shape = {
@@ -171,18 +192,20 @@ class StudentApp {
       type: type,
       x: this.centerX + Math.cos(angle) * distance,
       y: this.centerY + Math.sin(angle) * distance,
-      angle: radialAngle, // Initial angle = radial direction from sun center
-      color: color,
+      angle: radialAngle,
       size: SHAPE_SIZE,
       scale: 1
     };
+
+    // Apply selected tint color
+    if (this.selectedTintColor) {
+      shape.tintColor = this.selectedTintColor;
+    }
 
     this.saveHistory();
     this.shapes.push(shape);
     this.syncToServer();
     this.render();
-
-    // Visual feedback
     this.flashPanel();
   }
 
@@ -202,17 +225,14 @@ class StudentApp {
     let shapeInitAngle = 0;
     let isPinching = false;
 
-    // --- Pointer events for drag ---
     this.canvas.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       if (this.locked) return;
-
       if (primaryPointerId !== null) return;
       primaryPointerId = e.pointerId;
 
       const { x, y } = this.canvasCoords(e);
 
-      // Check face parts first (if in personify or free mode)
       if (this.mode === 'personify' || this.mode === 'free') {
         this.selectedFacePart = this.faceMode.findPartAt(x, y);
         if (this.selectedFacePart) {
@@ -226,7 +246,6 @@ class StudentApp {
         }
       }
 
-      // Check shapes
       if (this.mode === 'symmetric' || this.mode === 'free') {
         this.selectedShape = this.findShapeAt(x, y);
         if (this.selectedShape) {
@@ -249,7 +268,7 @@ class StudentApp {
         this.selectedFacePart.offsetX = x - this.dragOffset.x - this.centerX;
         this.selectedFacePart.offsetY = y - this.dragOffset.y - this.centerY;
         this.faceMode.constrainToSun(this.selectedFacePart);
-        this.syncToServer();
+        this.throttledSync();
         this.render();
         return;
       }
@@ -257,7 +276,7 @@ class StudentApp {
       if (this.selectedShape) {
         this.selectedShape.x = x - this.dragOffset.x;
         this.selectedShape.y = y - this.dragOffset.y;
-        this.syncToServer();
+        this.throttledSync();
         this.render();
       }
     });
@@ -265,9 +284,9 @@ class StudentApp {
     this.canvas.addEventListener('pointerup', (e) => {
       if (e.pointerId !== primaryPointerId) return;
       primaryPointerId = null;
+      this._flushSync();
 
       if (this.selectedShape) {
-        // Delete if dragged outside canvas
         const dx = this.selectedShape.x - this.centerX;
         const dy = this.selectedShape.y - this.centerY;
         if (Math.sqrt(dx * dx + dy * dy) > this.canvasRadius + SHAPE_SIZE) {
@@ -282,7 +301,6 @@ class StudentApp {
       try { this.canvas.releasePointerCapture(e.pointerId); } catch (_) {}
     });
 
-    // --- Touch events for pinch zoom + rotation ---
     this.canvas.addEventListener('touchstart', (e) => {
       if (e.touches.length === 2) {
         isPinching = true;
@@ -306,19 +324,16 @@ class StudentApp {
 
         const target = this.selectedShape || this.selectedFacePart;
         if (target && initialPinchDist > 0) {
-          // Scale
           let newScale = shapeInitScale * (currentDist / initialPinchDist);
           newScale = Math.max(SCALE_LIMITS.min, Math.min(SCALE_LIMITS.max, newScale));
           target.scale = newScale;
-
-          // Rotation
           target.angle = shapeInitAngle + (currentAngle - initialPinchAngle);
 
           if (this.selectedFacePart) {
             this.faceMode.constrainToSun(this.selectedFacePart);
           }
 
-          this.syncToServer();
+          this.throttledSync();
           this.render();
         }
       }
@@ -328,6 +343,7 @@ class StudentApp {
       if (e.touches.length < 2) {
         isPinching = false;
         initialPinchDist = 0;
+        this._flushSync();
       }
     }, { passive: true });
   }
@@ -355,7 +371,29 @@ class StudentApp {
     return null;
   }
 
-  // --- History / Undo ---
+  throttledSync() {
+    this._syncPending = true;
+    if (this._syncTimer) return;
+    this._syncTimer = setTimeout(() => {
+      this._syncTimer = null;
+      if (this._syncPending) {
+        this._syncPending = false;
+        this.syncToServer();
+      }
+    }, 100);
+  }
+
+  _flushSync() {
+    if (this._syncTimer) {
+      clearTimeout(this._syncTimer);
+      this._syncTimer = null;
+    }
+    if (this._syncPending) {
+      this._syncPending = false;
+      this.syncToServer();
+    }
+  }
+
   saveHistory() {
     this.history.push({
       shapes: JSON.parse(JSON.stringify(this.shapes)),
@@ -382,16 +420,15 @@ class StudentApp {
     this.render();
   }
 
-  // --- Sync to server ---
   syncToServer() {
     this.client.updateState({
       shapes: this.shapes,
       faceParts: this.faceParts,
-      sunSkin: this.sunSkin
+      sunSkin: this.sunSkin,
+      canvasRadius: this.canvasRadius
     });
   }
 
-  // --- Socket ---
   connectSocket() {
     this.client.connect();
     this.client.registerStudent({ sunSkin: this.sunSkin });
@@ -418,12 +455,18 @@ class StudentApp {
       this.locked = data.locked;
       this.updateLockUI();
     });
+
+    // Reload assets when teacher adds/removes custom assets
+    this.client.on('assets_updated', async () => {
+      await AssetLoader.reloadCustomAssets();
+      this.renderShapePanel();
+      this.faceMode.renderPanel();
+    });
   }
 
   updateModeUI() {
     const modeLabel = document.getElementById('mode-label');
     const shapePanel = document.getElementById('shape-panel');
-    const facePanel = document.getElementById('face-panel');
 
     const labels = {
       symmetric: '对称装饰模式',
@@ -432,7 +475,6 @@ class StudentApp {
     };
     if (modeLabel) modeLabel.textContent = labels[this.mode] || '';
 
-    // Show/hide panels based on mode
     if (shapePanel) {
       shapePanel.classList.toggle('visible', this.mode === 'symmetric' || this.mode === 'free');
     }
@@ -440,6 +482,12 @@ class StudentApp {
       this.faceMode.show();
     } else {
       this.faceMode.hide();
+    }
+
+    // Show/hide color palette based on mode
+    const colorBar = document.getElementById('color-bar');
+    if (colorBar) {
+      colorBar.classList.toggle('visible', this.mode === 'symmetric' || this.mode === 'free');
     }
   }
 
@@ -450,7 +498,6 @@ class StudentApp {
     }
   }
 
-  // --- Animation ---
   startAnimation() {
     const animate = () => {
       this.breathPhase += SUN_CONFIG.breathingSpeed;
@@ -466,11 +513,9 @@ class StudentApp {
     animate();
   }
 
-  // --- Render ---
   render(breathScale = 1) {
     const ctx = this.ctx;
 
-    // Background gradient
     const bgGradient = ctx.createRadialGradient(
       this.centerX, this.centerY, 0,
       this.centerX, this.centerY, this.canvasRadius
@@ -484,43 +529,34 @@ class StudentApp {
     ctx.arc(this.centerX, this.centerY, this.canvasRadius, 0, Math.PI * 2);
     ctx.fill();
 
-    // Clip to circle
     ctx.save();
     ctx.beginPath();
     ctx.arc(this.centerX, this.centerY, this.canvasRadius - 3, 0, Math.PI * 2);
     ctx.clip();
 
-    // Draw sun
-    drawSun(ctx, this.centerX, this.centerY, this.canvasRadius, this.sunSkin, breathScale);
+    drawSun(ctx, this.centerX, this.centerY, this.canvasRadius, this.sunSkin, breathScale, this.mode);
 
-    // Draw shapes based on mode
     if (this.mode === 'symmetric') {
       this.renderSymmetric(ctx);
     } else if (this.mode === 'personify') {
       this.renderFaceParts(ctx);
     } else {
-      // Free mode: both
       this.renderSymmetric(ctx);
       this.renderFaceParts(ctx);
     }
 
     ctx.restore();
 
-    // Draw symmetry guides for symmetric/free mode
     if (this.mode === 'symmetric' || this.mode === 'free') {
       this.renderSymmetryGuides(ctx);
     }
 
-    // Selection highlight
     this.renderSelectionHighlight(ctx);
   }
 
   renderSymmetric(ctx) {
     this.shapes.forEach(shape => {
-      // Draw original
       drawShape(ctx, shape, shape.size);
-
-      // Draw 3 mirror copies
       const mirrors = getMirroredPositions(shape, this.centerX, this.centerY);
       mirrors.slice(1).forEach(pos => {
         const mirroredShape = {
@@ -535,7 +571,7 @@ class StudentApp {
   }
 
   renderFaceParts(ctx) {
-    const sunR = getSunRadius(this.canvasRadius);
+    const sunR = getSunRadius(this.canvasRadius, this.mode);
     this.faceParts.forEach(part => {
       drawFacePart(ctx, part, this.centerX, this.centerY, sunR);
     });
@@ -564,7 +600,7 @@ class StudentApp {
       y = target.y;
       radius = (target.size * (target.scale || 1)) / 2 + 8;
     } else {
-      const sunR = getSunRadius(this.canvasRadius);
+      const sunR = getSunRadius(this.canvasRadius, this.mode);
       x = this.centerX + target.offsetX;
       y = this.centerY + target.offsetY;
       radius = sunR * 0.4 * (target.scale || 1) + 8;
@@ -582,7 +618,6 @@ class StudentApp {
   }
 }
 
-// Start app
 document.addEventListener('DOMContentLoaded', () => {
   const app = new StudentApp();
   app.init();

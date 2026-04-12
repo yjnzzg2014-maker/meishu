@@ -23,8 +23,8 @@
     <div id="shape-panel" class="side-panel visible">
       <div class="panel-header">素材</div>
       <div class="category-tabs">
-        <button class="category-tab active" data-category="geometry">几何</button>
-        <button class="category-tab" data-category="nature">自然</button>
+        <button class="category-tab active" data-category="dots">点</button>
+        <button class="category-tab" data-category="lines">线</button>
       </div>
       <div id="shape-items" class="panel-grid"></div>
     </div>
@@ -37,6 +37,12 @@
     <!-- Canvas area -->
     <div id="canvas-container">
       <canvas id="main-canvas"></canvas>
+    </div>
+
+    <!-- Color palette bar -->
+    <div id="color-bar" class="visible">
+      <div class="color-bar-label">调色</div>
+      <div id="color-palette"></div>
     </div>
 
     <!-- Sun skin selector (bottom) -->

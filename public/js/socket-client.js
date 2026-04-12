@@ -8,13 +8,14 @@ class SocketClient {
   connect() {
     this.socket = io();
 
-    // Forward all server events to registered callbacks
     const events = [
       'init_state', 'mode_changed', 'lock_changed', 'student_count',
       // Teacher-specific events
       'teacher_init', 'student_joined', 'student_left',
       'student_updated', 'student_state', 'student_list',
-      'students_summary'
+      'students_summary',
+      // Asset sync
+      'assets_updated'
     ];
 
     events.forEach(event => {

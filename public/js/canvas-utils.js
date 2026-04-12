@@ -1,9 +1,9 @@
 // Draw sun using pre-generated skin image
-function drawSun(ctx, centerX, centerY, canvasRadius, skinId, breathScale) {
+function drawSun(ctx, centerX, centerY, canvasRadius, skinId, breathScale, mode) {
   const sunImg = AssetLoader.get('sun_' + skinId);
   if (!sunImg) return;
 
-  const sunRadius = canvasRadius * SUN_CONFIG.radiusRatio;
+  const sunRadius = getSunRadius(canvasRadius, mode);
   const drawSize = (sunRadius + canvasRadius * SUN_CONFIG.rayLengthRatio + 20) * 2;
 
   ctx.save();
@@ -13,19 +13,28 @@ function drawSun(ctx, centerX, centerY, canvasRadius, skinId, breathScale) {
   ctx.restore();
 }
 
-// Get sun body radius for a given canvas radius
-function getSunRadius(canvasRadius) {
-  return canvasRadius * SUN_CONFIG.radiusRatio;
+// Get sun body radius for a given canvas radius (mode-aware)
+function getSunRadius(canvasRadius, mode) {
+  const ratio = (mode === 'personify')
+    ? SUN_CONFIG.personifyRadiusRatio
+    : SUN_CONFIG.radiusRatio;
+  return canvasRadius * ratio;
 }
 
-// Draw a shape from cached asset image
+// Draw a shape from cached asset image, with optional tint color
 function drawShape(ctx, shape, baseSize) {
-  const assetKey = `shape_${shape.type}_${shape.color}`;
-  const img = AssetLoader.get(assetKey);
-  if (!img) return;
-
+  const assetKey = `shape_${shape.type}`;
   const scale = shape.scale || 1;
   const size = baseSize * scale;
+
+  // Get tinted or original image
+  let img;
+  if (shape.tintColor) {
+    img = AssetLoader.getTinted(assetKey, shape.tintColor);
+  } else {
+    img = AssetLoader.get(assetKey);
+  }
+  if (!img) return;
 
   ctx.save();
   ctx.translate(shape.x, shape.y);
@@ -40,7 +49,6 @@ function drawFacePart(ctx, part, centerX, centerY, sunRadius) {
   if (!img) return;
 
   const scale = part.scale || 1;
-  // Face parts are positioned relative to sun center
   const size = sunRadius * 0.8 * scale;
 
   ctx.save();

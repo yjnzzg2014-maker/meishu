@@ -1,12 +1,18 @@
 class TeacherApp {
   constructor() {
     this.client = new SocketClient();
-    this.students = new Map(); // id -> { state, canvas, ctx }
+    this.students = new Map();
     this.mode = 'symmetric';
     this.locked = false;
     this.breathPhase = 0;
     this.animationId = null;
     this.zoomedStudentId = null;
+
+    // Drawing tool
+    this.drawTool = null;
+
+    // Face import state
+    this.faceImportData = null;
 
     this.init();
   }
@@ -16,8 +22,10 @@ class TeacherApp {
     document.getElementById('loader')?.remove();
 
     this.setupControls();
+    this.setupAssetManagement();
     this.connectSocket();
     this.startAnimation();
+    this.renderCustomAssets();
   }
 
   setupControls() {
@@ -47,6 +55,203 @@ class TeacherApp {
     }
   }
 
+  setupAssetManagement() {
+    // --- Drawing Tool ---
+    this.drawTool = new DrawTool(async (data) => {
+      try {
+        const res = await fetch('/api/shapes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        if (res.ok) {
+          await AssetLoader.reloadCustomAssets();
+          this.renderCustomAssets();
+        }
+      } catch (e) {
+        console.error('Failed to save shape:', e);
+      }
+    });
+
+    const drawBtn = document.getElementById('btn-draw-shape');
+    if (drawBtn) {
+      drawBtn.addEventListener('click', () => this.drawTool.show());
+    }
+
+    // --- Face Import ---
+    const importBtn = document.getElementById('btn-import-face');
+    const fileInput = document.getElementById('face-file-input');
+    const faceModal = document.getElementById('face-import-modal');
+
+    if (importBtn) {
+      importBtn.addEventListener('click', () => fileInput.click());
+    }
+
+    if (fileInput) {
+      fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          this.faceImportData = ev.target.result;
+          // Show preview
+          const previewArea = document.getElementById('face-preview-area');
+          if (previewArea) {
+            previewArea.innerHTML = '';
+            const img = document.createElement('img');
+            img.src = this.faceImportData;
+            img.style.maxWidth = '120px';
+            img.style.maxHeight = '120px';
+            previewArea.appendChild(img);
+          }
+          // Show modal
+          if (faceModal) faceModal.classList.add('visible');
+        };
+        reader.readAsDataURL(file);
+        fileInput.value = '';
+      });
+    }
+
+    // Face modal controls
+    document.getElementById('face-modal-close')?.addEventListener('click', () => {
+      faceModal?.classList.remove('visible');
+    });
+    document.getElementById('face-modal-cancel')?.addEventListener('click', () => {
+      faceModal?.classList.remove('visible');
+    });
+
+    // Face category buttons
+    document.querySelectorAll('.face-cat-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.face-cat-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      });
+    });
+
+    // Face save
+    document.getElementById('face-modal-save')?.addEventListener('click', async () => {
+      const name = document.getElementById('face-import-name')?.value.trim();
+      if (!name) { alert('请输入五官名称'); return; }
+      if (!this.faceImportData) { alert('请选择图片'); return; }
+
+      const activeCat = document.querySelector('.face-cat-btn.active');
+      const category = activeCat ? activeCat.dataset.cat : 'eyes';
+
+      try {
+        const res = await fetch('/api/faces', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, category, imageData: this.faceImportData })
+        });
+        if (res.ok) {
+          faceModal?.classList.remove('visible');
+          document.getElementById('face-import-name').value = '';
+          this.faceImportData = null;
+          await AssetLoader.reloadCustomAssets();
+          this.renderCustomAssets();
+        }
+      } catch (e) {
+        console.error('Failed to import face:', e);
+      }
+    });
+  }
+
+  renderCustomAssets() {
+    // Render custom shapes
+    const shapesGrid = document.getElementById('custom-shapes-grid');
+    const noShapes = document.getElementById('no-custom-shapes');
+    if (shapesGrid) {
+      shapesGrid.innerHTML = '';
+      const customShapes = SHAPES.filter(s => s.custom);
+      if (noShapes) noShapes.style.display = customShapes.length ? 'none' : 'block';
+
+      customShapes.forEach(shape => {
+        const card = document.createElement('div');
+        card.className = 'asset-card';
+
+        const img = AssetLoader.get(`shape_${shape.id}`);
+        if (img) {
+          const preview = document.createElement('canvas');
+          preview.width = 60;
+          preview.height = 60;
+          const pctx = preview.getContext('2d');
+          pctx.drawImage(img, 5, 5, 50, 50);
+          card.appendChild(preview);
+        }
+
+        const info = document.createElement('div');
+        info.className = 'asset-info';
+        info.innerHTML = `<span class="asset-name">${shape.name}</span><span class="asset-cat">${shape.category === 'dots' ? '点' : '线'}</span>`;
+        card.appendChild(info);
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'asset-del-btn';
+        delBtn.textContent = '删除';
+        delBtn.addEventListener('click', async () => {
+          if (!confirm(`确定删除素材"${shape.name}"？`)) return;
+          try {
+            await fetch(`/api/shapes/${shape.id}`, { method: 'DELETE' });
+            await AssetLoader.reloadCustomAssets();
+            this.renderCustomAssets();
+          } catch (e) { console.error(e); }
+        });
+        card.appendChild(delBtn);
+
+        shapesGrid.appendChild(card);
+      });
+    }
+
+    // Render custom faces
+    const facesGrid = document.getElementById('custom-faces-grid');
+    const noFaces = document.getElementById('no-custom-faces');
+    if (facesGrid) {
+      facesGrid.innerHTML = '';
+      const catNames = { eyes: '眼睛', noses: '鼻子', mouths: '嘴巴', extras: '其他' };
+      let customFaceCount = 0;
+
+      for (const catId of Object.keys(FACE_PARTS)) {
+        FACE_PARTS[catId].filter(f => f.custom).forEach(face => {
+          customFaceCount++;
+          const card = document.createElement('div');
+          card.className = 'asset-card';
+
+          const img = AssetLoader.get(`face_${face.id}`);
+          if (img) {
+            const preview = document.createElement('canvas');
+            preview.width = 60;
+            preview.height = 60;
+            const pctx = preview.getContext('2d');
+            pctx.drawImage(img, 5, 5, 50, 50);
+            card.appendChild(preview);
+          }
+
+          const info = document.createElement('div');
+          info.className = 'asset-info';
+          info.innerHTML = `<span class="asset-name">${face.name}</span><span class="asset-cat">${catNames[catId] || catId}</span>`;
+          card.appendChild(info);
+
+          const delBtn = document.createElement('button');
+          delBtn.className = 'asset-del-btn';
+          delBtn.textContent = '删除';
+          delBtn.addEventListener('click', async () => {
+            if (!confirm(`确定删除五官"${face.name}"？`)) return;
+            try {
+              await fetch(`/api/faces/${face.id}`, { method: 'DELETE' });
+              await AssetLoader.reloadCustomAssets();
+              this.renderCustomAssets();
+            } catch (e) { console.error(e); }
+          });
+          card.appendChild(delBtn);
+
+          facesGrid.appendChild(card);
+        });
+      }
+
+      if (noFaces) noFaces.style.display = customFaceCount ? 'none' : 'block';
+    }
+  }
+
   setMode(mode) {
     this.mode = mode;
     this.client.changeMode(mode);
@@ -73,7 +278,6 @@ class TeacherApp {
         lockBtn.textContent = this.locked ? '已锁定' : '锁定操作';
       }
 
-      // Initialize student entries
       if (data.students) {
         data.students.forEach(s => {
           this.addStudentEntry(s.id || s.socketId, s);
@@ -114,8 +318,13 @@ class TeacherApp {
     });
 
     this.client.on('students_summary', (summaries) => {
-      // Update student count from summaries
       this.updateStudentCountDisplay(summaries.length);
+    });
+
+    // Reload custom assets when updated
+    this.client.on('assets_updated', async () => {
+      await AssetLoader.reloadCustomAssets();
+      this.renderCustomAssets();
     });
   }
 
@@ -128,7 +337,6 @@ class TeacherApp {
     const grid = document.getElementById('student-grid');
     if (!grid) return;
 
-    // Create thumbnail card
     const card = document.createElement('div');
     card.className = 'student-card';
     card.dataset.studentId = id;
@@ -176,13 +384,11 @@ class TeacherApp {
     if (empty) empty.style.display = this.students.size === 0 ? 'block' : 'none';
   }
 
-  // --- Zoom view ---
   zoomStudent(id) {
     this.zoomedStudentId = id;
     const zoomView = document.getElementById('zoom-view');
     if (zoomView) zoomView.classList.add('visible');
 
-    // Request latest state
     this.client.getStudentState(id);
 
     this.client.on('student_state', (data) => {
@@ -199,7 +405,6 @@ class TeacherApp {
     if (zoomView) zoomView.classList.remove('visible');
   }
 
-  // --- Animation ---
   startAnimation() {
     const animate = () => {
       this.breathPhase += SUN_CONFIG.breathingSpeed;
@@ -216,12 +421,10 @@ class TeacherApp {
   }
 
   renderAll(breathScale) {
-    // Render each student thumbnail
     this.students.forEach((entry, id) => {
       this.renderStudentCanvas(entry, breathScale);
     });
 
-    // Render zoom view if open
     if (this.zoomedStudentId) {
       this.renderZoomView(breathScale);
     }
@@ -233,7 +436,6 @@ class TeacherApp {
     const h = entry.canvas.height;
     const cx = w / 2, cy = h / 2, r = w / 2 - 5;
 
-    // Background
     const bg = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
     bg.addColorStop(0, '#FFF8E7');
     bg.addColorStop(0.7, '#FFE8D0');
@@ -248,18 +450,12 @@ class TeacherApp {
     ctx.arc(cx, cy, r - 2, 0, Math.PI * 2);
     ctx.clip();
 
-    // Sun
     const skinId = (entry.state && entry.state.sunSkin) || 'cartoon';
-    drawSun(ctx, cx, cy, r, skinId, breathScale);
+    drawSun(ctx, cx, cy, r, skinId, breathScale, this.mode);
 
-    // Shapes
     const shapes = (entry.state && entry.state.shapes) || [];
     const faceParts = (entry.state && entry.state.faceParts) || [];
-
-    // Need to scale shapes from student canvas coords to thumbnail coords
-    // Student canvas is typically ~700-800px wide, thumbnail is 240px
-    // We'll normalize: student canvasRadius maps to thumbnail r
-    const studentCanvasRadius = 400; // Half of typical 800px canvas
+    const studentCanvasRadius = (entry.state && entry.state.canvasRadius) || 400;
     const scaleFactor = r / studentCanvasRadius;
 
     if (this.mode === 'symmetric' || this.mode === 'free') {
@@ -275,7 +471,7 @@ class TeacherApp {
     }
 
     if (this.mode === 'personify' || this.mode === 'free') {
-      const sunR = getSunRadius(r);
+      const sunR = getSunRadius(r, this.mode);
       faceParts.forEach(part => {
         const scaledPart = {
           ...part,
@@ -328,11 +524,11 @@ class TeacherApp {
     ctx.clip();
 
     const skinId = (entry.state && entry.state.sunSkin) || 'cartoon';
-    drawSun(ctx, cx, cy, r, skinId, breathScale);
+    drawSun(ctx, cx, cy, r, skinId, breathScale, this.mode);
 
     const shapes = (entry.state && entry.state.shapes) || [];
     const faceParts = (entry.state && entry.state.faceParts) || [];
-    const studentCanvasRadius = 400;
+    const studentCanvasRadius = (entry.state && entry.state.canvasRadius) || 400;
     const scaleFactor = r / studentCanvasRadius;
 
     if (this.mode === 'symmetric' || this.mode === 'free') {
@@ -347,7 +543,7 @@ class TeacherApp {
     }
 
     if (this.mode === 'personify' || this.mode === 'free') {
-      const sunR = getSunRadius(r);
+      const sunR = getSunRadius(r, this.mode);
       faceParts.forEach(part => {
         const scaledPart = {
           ...part,
@@ -358,7 +554,6 @@ class TeacherApp {
       });
     }
 
-    // Symmetry guides
     if (this.mode === 'symmetric' || this.mode === 'free') {
       ctx.strokeStyle = 'rgba(255, 180, 100, 0.3)';
       ctx.lineWidth = 1;

@@ -1,4 +1,4 @@
-// Face mode - manages personification (五官装饰) logic
+// Face mode - manages personification logic
 class FaceMode {
   constructor(app) {
     this.app = app;
@@ -10,6 +10,15 @@ class FaceMode {
 
   init() {
     this.renderPanel();
+  }
+
+  getCategoryForPart(partId) {
+    for (const catId of Object.keys(FACE_PARTS)) {
+      if (FACE_PARTS[catId].some(p => p.id === partId)) {
+        return catId;
+      }
+    }
+    return 'extras';
   }
 
   renderPanel() {
@@ -39,6 +48,11 @@ class FaceMode {
       const item = document.createElement('div');
       item.className = 'face-item';
 
+      const isActive = this.app.faceParts.some(fp => fp.partId === part.id);
+      if (isActive) {
+        item.classList.add('active');
+      }
+
       const img = AssetLoader.get('face_' + part.id);
       if (img) {
         const preview = document.createElement('canvas');
@@ -54,35 +68,53 @@ class FaceMode {
       label.textContent = part.name;
       item.appendChild(label);
 
-      item.addEventListener('click', () => this.addPart(part.id));
+      item.addEventListener('click', () => this.setPart(part.id));
       grid.appendChild(item);
     });
     this.panel.appendChild(grid);
   }
 
-  addPart(partId) {
-    const sunRadius = getSunRadius(this.app.canvasRadius);
+  setPart(partId) {
+    const category = this.getCategoryForPart(partId);
+    const sunRadius = getSunRadius(this.app.canvasRadius, this.app.mode);
+    const slot = FACE_SLOT_POSITIONS[category] || { offsetX: 0, offsetY: 0 };
 
-    const part = {
+    this.app.faceParts = this.app.faceParts.filter(p =>
+      this.getCategoryForPart(p.partId) !== category
+    );
+
+    this.app.faceParts.push({
       id: Date.now() + '_' + Math.random().toString(36).substr(2, 6),
       partId: partId,
-      offsetX: (Math.random() - 0.5) * sunRadius * 0.3,
-      offsetY: (Math.random() - 0.5) * sunRadius * 0.3,
+      offsetX: slot.offsetX * sunRadius,
+      offsetY: slot.offsetY * sunRadius,
       scale: 1,
       angle: 0
-    };
+    });
 
-    this.app.faceParts.push(part);
     this.app.syncToServer();
     this.app.render();
+    this.updateActiveStates();
 
-    // Bounce animation feedback
     this.panel.classList.add('panel-bounce');
     setTimeout(() => this.panel.classList.remove('panel-bounce'), 300);
   }
 
+  updateActiveStates() {
+    if (!this.panel) return;
+    const items = this.panel.querySelectorAll('.face-item');
+    const parts = FACE_PARTS[this.activeCategory] || [];
+
+    items.forEach((item, index) => {
+      if (index < parts.length) {
+        const isActive = this.app.faceParts.some(fp => fp.partId === parts[index].id);
+        item.classList.toggle('active', isActive);
+      }
+    });
+  }
+
   findPartAt(x, y) {
-    const sunRadius = getSunRadius(this.app.canvasRadius);
+    const sunRadius = getSunRadius(this.app.canvasRadius, this.app.mode);
     const cx = this.app.centerX;
     const cy = this.app.centerY;
 
@@ -100,9 +132,8 @@ class FaceMode {
     return null;
   }
 
-  // Constrain face part to stay within sun body
   constrainToSun(part) {
-    const sunRadius = getSunRadius(this.app.canvasRadius);
+    const sunRadius = getSunRadius(this.app.canvasRadius, this.app.mode);
     const maxDist = sunRadius * 0.75;
     const dist = Math.sqrt(part.offsetX * part.offsetX + part.offsetY * part.offsetY);
     if (dist > maxDist) {

@@ -16,7 +16,6 @@ class StudentApp {
     this.sunSkin = 'cartoon';
     this.locked = false;
     this.isDisplaying = false;
-    this.displayStudentName = '';
     this.displayState = null;
     this.breathPhase = 0;
     this.animationId = null;
@@ -501,7 +500,7 @@ class StudentApp {
 
     // Display broadcast from teacher
     this.client.on('display_broadcast', (data) => {
-      this.showDisplayModal(data.studentName, data.state);
+      this.showDisplayModal(data.state);
     });
 
     // Display closed by teacher
@@ -544,25 +543,28 @@ class StudentApp {
     }
   }
 
-  showDisplayModal(studentName, state) {
+  showDisplayModal(state) {
     this.isDisplaying = true;
-    this.displayStudentName = studentName;
     this.displayState = state;
 
     const modal = document.getElementById('display-modal');
     const canvas = document.getElementById('display-canvas');
+    const displayWaiting = document.getElementById('display-waiting');
+
+    if (!canvas) return;
 
     // 渲染被展示学生的作品到 display-canvas
     this.renderDisplayCanvas(canvas, state);
 
     modal.classList.add('visible');
-    document.getElementById('display-waiting').classList.remove('visible');
+    displayWaiting.classList.remove('visible');
   }
 
   hideDisplayModal() {
     this.isDisplaying = false;
+    const displayWaiting = document.getElementById('display-waiting');
     document.getElementById('display-modal').classList.remove('visible');
-    document.getElementById('display-waiting').classList.add('visible');
+    displayWaiting.classList.add('visible');
   }
 
   renderDisplayCanvas(canvas, state) {

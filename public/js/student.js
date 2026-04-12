@@ -576,30 +576,48 @@ class StudentApp {
 
     if (!state) return;
 
+    const displayCenter = size / 2;
+    const displayRadius = size / 2 - 10;
+    const originalRadius = state.canvasRadius || 400;
+    const scale = displayRadius / originalRadius;
+
     // 绘制太阳背景
     const skin = state.sunSkin || 'default';
     const skinImg = AssetLoader.get('sun_' + skin);
     if (skinImg) {
       ctx.save();
       ctx.beginPath();
-      ctx.arc(size / 2, size / 2, size / 2 - 10, 0, Math.PI * 2);
+      ctx.arc(displayCenter, displayCenter, displayRadius, 0, Math.PI * 2);
       ctx.clip();
       ctx.drawImage(skinImg, 0, 0, size, size);
       ctx.restore();
     }
 
-    // 绘制 shapes
+    // 绘制 shapes - 按比例缩放并居中
     if (state.shapes) {
       state.shapes.forEach(shape => {
-        drawShape(ctx, shape, shape.size);
+        const scaledShape = {
+          ...shape,
+          x: displayCenter + (shape.x - originalRadius) * scale,
+          y: displayCenter + (shape.y - originalRadius) * scale,
+          size: (shape.size || 40) * scale
+        };
+        drawShape(ctx, scaledShape, scaledShape.size);
       });
     }
 
-    // 绘制 faceParts
+    // 绘制 faceParts - 按比例缩放并居中
     if (state.faceParts) {
       const displaySunR = size / 2 * SUN_CONFIG.personifyRadiusRatio;
+      const originalSunR = originalRadius * SUN_CONFIG.personifyRadiusRatio;
       state.faceParts.forEach(part => {
-        drawFacePart(ctx, part, size / 2, size / 2, displaySunR);
+        const scaledPart = {
+          ...part,
+          offsetX: (part.offsetX || 0) * scale,
+          offsetY: (part.offsetY || 0) * scale,
+          scale: (part.scale || 1) * scale
+        };
+        drawFacePart(ctx, scaledPart, displayCenter, displayCenter, displaySunR);
       });
     }
   }

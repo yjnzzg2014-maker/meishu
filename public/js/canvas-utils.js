@@ -4,7 +4,7 @@ function drawSun(ctx, centerX, centerY, canvasRadius, skinId, breathScale, mode)
   if (!sunImg) return;
 
   const sunRadius = getSunRadius(canvasRadius, mode);
-  const drawSize = (sunRadius + canvasRadius * SUN_CONFIG.rayLengthRatio + 20) * 2;
+  const drawSize = (sunRadius + 25) * 2;
 
   ctx.save();
   ctx.translate(centerX, centerY);
@@ -36,9 +36,12 @@ function drawShape(ctx, shape, baseSize) {
   }
   if (!img) return;
 
+  // Total angle = base angle pointing to center + user rotation offset
+  const totalAngle = (shape.angle || 0) + (shape.rotationOffset || 0);
+
   ctx.save();
   ctx.translate(shape.x, shape.y);
-  ctx.rotate(shape.angle || 0);
+  ctx.rotate(totalAngle);
   ctx.drawImage(img, -size / 2, -size / 2, size, size);
   ctx.restore();
 }
@@ -58,15 +61,28 @@ function drawFacePart(ctx, part, centerX, centerY, sunRadius) {
   ctx.restore();
 }
 
-// Mirror shape positions for symmetric mode
+// Mirror shape positions for symmetric mode (X-axis and Y-axis reflection)
+// Returns: original, X-mirror, Y-mirror, XY-mirror
 function getMirroredPositions(shape, centerX, centerY) {
-  const dx = shape.x - centerX;
-  const dy = shape.y - centerY;
+  const x = shape.x;
+  const y = shape.y;
+  const angle = shape.angle || 0; // angle pointing toward center (bottom faces center)
+  const rotationOffset = shape.rotationOffset || 0;
+
+  // Total angle for each mirror
+  const totalAngle = angle + rotationOffset;
 
   return [
-    { x: centerX + dx, y: centerY + dy, angle: shape.angle || 0 },
-    { x: centerX - dx, y: centerY + dy, angle: Math.PI - (shape.angle || 0) },
-    { x: centerX + dx, y: centerY - dy, angle: -(shape.angle || 0) },
-    { x: centerX - dx, y: centerY - dy, angle: Math.PI + (shape.angle || 0) }
+    // Original position
+    { x: x, y: y, angle: totalAngle, rotationOffset: rotationOffset },
+    // X-axis mirror (left-right symmetry): flip horizontally
+    // angle changes: PI - angle (horizontal flip preserves "pointing toward center")
+    { x: 2 * centerX - x, y: y, angle: Math.PI - totalAngle, rotationOffset: rotationOffset },
+    // Y-axis mirror (up-down symmetry): flip vertically
+    // angle changes: -angle (vertical flip preserves "pointing toward center")
+    { x: x, y: 2 * centerY - y, angle: -totalAngle, rotationOffset: rotationOffset },
+    // XY mirror (both axes): center symmetry (180° rotation)
+    // angle changes: PI + angle
+    { x: 2 * centerX - x, y: 2 * centerY - y, angle: Math.PI + totalAngle, rotationOffset: rotationOffset }
   ];
 }

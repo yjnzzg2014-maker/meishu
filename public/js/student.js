@@ -15,8 +15,6 @@ class StudentApp {
     this.mode = 'symmetric';
     this.sunSkin = 'cartoon';
     this.locked = false;
-    this.isDisplaying = false;
-    this.displayState = null;
     this.breathPhase = 0;
     this.animationId = null;
     this.history = [];
@@ -498,15 +496,6 @@ class StudentApp {
       this.faceMode.renderPanel();
     });
 
-    // Display broadcast from teacher
-    this.client.on('display_broadcast', (data) => {
-      this.showDisplayModal(data.state);
-    });
-
-    // Display closed by teacher
-    this.client.on('display_closed_by_teacher', () => {
-      this.hideDisplayModal();
-    });
   }
 
   updateModeUI() {
@@ -540,85 +529,6 @@ class StudentApp {
     const lockOverlay = document.getElementById('lock-overlay');
     if (lockOverlay) {
       lockOverlay.classList.toggle('visible', this.locked);
-    }
-  }
-
-  showDisplayModal(state) {
-    this.isDisplaying = true;
-    this.displayState = state;
-
-    const modal = document.getElementById('display-modal');
-    const canvas = document.getElementById('display-canvas');
-    const displayWaiting = document.getElementById('display-waiting');
-
-    if (!canvas) return;
-
-    // 渲染被展示学生的作品到 display-canvas
-    this.renderDisplayCanvas(canvas, state);
-
-    modal.classList.add('visible');
-    displayWaiting.classList.remove('visible');
-  }
-
-  hideDisplayModal() {
-    this.isDisplaying = false;
-    const displayWaiting = document.getElementById('display-waiting');
-    document.getElementById('display-modal').classList.remove('visible');
-    displayWaiting.classList.add('visible');
-  }
-
-  renderDisplayCanvas(canvas, state) {
-    const ctx = canvas.getContext('2d');
-    const size = 500;
-    canvas.width = size;
-    canvas.height = size;
-    ctx.clearRect(0, 0, size, size);
-
-    if (!state) return;
-
-    const displayCenter = size / 2;
-    const displayRadius = size / 2 - 10;
-    const originalRadius = state.canvasRadius || 400;
-    const scale = displayRadius / originalRadius;
-
-    // 绘制太阳背景
-    const skin = state.sunSkin || 'default';
-    const skinImg = AssetLoader.get('sun_' + skin);
-    if (skinImg) {
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(displayCenter, displayCenter, displayRadius, 0, Math.PI * 2);
-      ctx.clip();
-      ctx.drawImage(skinImg, 0, 0, size, size);
-      ctx.restore();
-    }
-
-    // 绘制 shapes - 按比例缩放并居中
-    if (state.shapes) {
-      state.shapes.forEach(shape => {
-        const scaledShape = {
-          ...shape,
-          x: displayCenter + (shape.x - originalRadius) * scale,
-          y: displayCenter + (shape.y - originalRadius) * scale,
-          size: (shape.size || 40) * scale
-        };
-        drawShape(ctx, scaledShape, scaledShape.size);
-      });
-    }
-
-    // 绘制 faceParts - 按比例缩放并居中
-    if (state.faceParts) {
-      const displaySunR = size / 2 * SUN_CONFIG.personifyRadiusRatio;
-      const originalSunR = originalRadius * SUN_CONFIG.personifyRadiusRatio;
-      state.faceParts.forEach(part => {
-        const scaledPart = {
-          ...part,
-          offsetX: (part.offsetX || 0) * scale,
-          offsetY: (part.offsetY || 0) * scale,
-          scale: (part.scale || 1) * scale
-        };
-        drawFacePart(ctx, scaledPart, displayCenter, displayCenter, displaySunR);
-      });
     }
   }
 

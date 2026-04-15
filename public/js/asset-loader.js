@@ -79,39 +79,28 @@ const AssetLoader = {
       const ctx = c.getContext('2d');
       const cx = size / 2, cy = size / 2, r = size * 0.35;
 
-      const glow = ctx.createRadialGradient(cx, cy, r * 0.3, cx, cy, size / 2);
-      glow.addColorStop(0, skin.glowColor + 'AA');
-      glow.addColorStop(0.6, skin.glowColor + '44');
-      glow.addColorStop(1, skin.glowColor + '00');
-      ctx.fillStyle = glow;
-      ctx.fillRect(0, 0, size, size);
-
-      ctx.fillStyle = skin.rayColor;
-      const rayCount = 12;
-      for (let i = 0; i < rayCount; i++) {
-        const angle = (i * 2 * Math.PI / rayCount) - Math.PI / 2;
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.rotate(angle);
-        ctx.beginPath();
-        ctx.moveTo(-10, -r - 5);
-        ctx.lineTo(10, -r - 5);
-        ctx.lineTo(5, -r - 35);
-        ctx.lineTo(-5, -r - 35);
-        ctx.closePath();
-        ctx.fill();
-        ctx.restore();
-      }
+      // Layer 1: Circle body + shadow
+      ctx.shadowColor = skin.shadowColor;
+      ctx.shadowBlur = 20;
+      ctx.shadowOffsetX = 5;
+      ctx.shadowOffsetY = 5;
 
       const bodyGrad = ctx.createRadialGradient(cx - r * 0.25, cy - r * 0.25, 0, cx, cy, r);
       bodyGrad.addColorStop(0, lightenColor(skin.baseColor, 40));
       bodyGrad.addColorStop(0.7, skin.baseColor);
-      bodyGrad.addColorStop(1, skin.glowColor);
+      bodyGrad.addColorStop(1, skin.shadowColor);
       ctx.fillStyle = bodyGrad;
       ctx.beginPath();
       ctx.arc(cx, cy, r, 0, Math.PI * 2);
       ctx.fill();
 
+      // Reset shadow for face drawing
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+
+      // Layer 2: Default face (eyes + smile)
       ctx.fillStyle = skin.faceColor;
       ctx.beginPath();
       ctx.arc(cx - r * 0.25, cy - r * 0.1, r * 0.08, 0, Math.PI * 2);

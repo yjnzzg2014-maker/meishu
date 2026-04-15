@@ -235,18 +235,6 @@ io.on('connection', (socket) => {
     io.emit('lock_changed', { locked });
   });
 
-  socket.on('broadcast_display', (data) => {
-    if (!teachers.has(socket.id)) return;
-    // data: { studentId, studentName, state }
-    // 转发给所有学生（包括发送者）
-    io.emit('display_broadcast', data);
-  });
-
-  socket.on('display_closed', () => {
-    if (!teachers.has(socket.id)) return;
-    io.emit('display_closed_by_teacher');
-  });
-
   socket.on('get_student_state', (data) => {
     if (!teachers.has(socket.id)) return;
     const student = students.get(data.studentId);

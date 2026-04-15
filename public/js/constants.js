@@ -26,15 +26,7 @@ const SHAPE_CATEGORIES = [
 
 // Shapes - PNG-based, extensible: add a PNG file + one line here
 // Custom shapes are appended at runtime from server
-const SHAPES = [
-  { id: 'dot1', name: '点1', category: 'dots', src: 'assets/shapes/dots/dot1.png' },
-  { id: 'dot2', name: '点2', category: 'dots', src: 'assets/shapes/dots/dot2.png' },
-  { id: 'dot3', name: '点3', category: 'dots', src: 'assets/shapes/dots/dot3.png' },
-  { id: 'dot4', name: '点4', category: 'dots', src: 'assets/shapes/dots/dot4.png' },
-  { id: 'line1', name: '线1', category: 'lines', src: 'assets/shapes/lines/line1.png' },
-  { id: 'line2', name: '线2', category: 'lines', src: 'assets/shapes/lines/line2.png' },
-  { id: 'line3', name: '线3', category: 'lines', src: 'assets/shapes/lines/line3.png' }
-];
+const SHAPES = [];
 
 // Three operating modes
 const MODES = {
@@ -45,10 +37,10 @@ const MODES = {
 
 // Sun skins
 const SUN_SKINS = [
-  { id: 'cartoon', name: '卡通', baseColor: '#FFD700', glowColor: '#FFA500', rayColor: '#FFCC00', faceColor: '#E8A000' },
-  { id: 'watercolor', name: '水彩', baseColor: '#FFE082', glowColor: '#FFCC80', rayColor: '#FFD54F', faceColor: '#D4A056' },
-  { id: 'sketch', name: '简笔画', baseColor: '#FFF9C4', glowColor: '#FFF176', rayColor: '#FFF59D', faceColor: '#C0A030' },
-  { id: 'sunset', name: '夕阳', baseColor: '#FF8A65', glowColor: '#FF5722', rayColor: '#FF7043', faceColor: '#BF360C' },
+  { id: 'cartoon', name: '卡通', baseColor: '#FFD700', shadowColor: '#CC9900', faceColor: '#E8A000' },
+  { id: 'watercolor', name: '水彩', baseColor: '#FFE082', shadowColor: '#D4A056', faceColor: '#D4A056' },
+  { id: 'sketch', name: '简笔画', baseColor: '#FFF9C4', shadowColor: '#C0A030', faceColor: '#C0A030' },
+  { id: 'sunset', name: '夕阳', baseColor: '#FF8A65', shadowColor: '#BF360C', faceColor: '#BF360C' },
   { id: 'simple', name: '简约', imagePath: 'images/sun-simple-alpha.png', makeWhiteTransparent: true }
 ];
 
@@ -102,8 +94,6 @@ const FACE_SLOT_POSITIONS = {
 const SUN_CONFIG = {
   radiusRatio: 0.18,
   personifyRadiusRatio: 0.32,   // Larger sun in personify mode for face operations
-  rayCount: 12,
-  rayLengthRatio: 0.06,
   breathingMin: 0.95,
   breathingMax: 1.05,
   breathingSpeed: 0.015

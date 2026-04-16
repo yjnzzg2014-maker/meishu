@@ -134,6 +134,10 @@ class DrawTool {
   setupDrawEvents() {
     let lastX, lastY;
 
+    // Prevent native text selection and context menu on long press
+    this.canvas.addEventListener('selectstart', (e) => e.preventDefault());
+    this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
     const getPos = (e) => {
       const rect = this.canvas.getBoundingClientRect();
       const scaleX = this.canvas.width / rect.width;

@@ -288,6 +288,10 @@ class StudentApp {
     let shapeInitRotationOffset = 0;
     let isPinching = false;
 
+    // Prevent native text selection and context menu on long press
+    this.canvas.addEventListener('selectstart', (e) => e.preventDefault());
+    this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
     this.canvas.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       if (this.locked) return;

@@ -37,6 +37,7 @@ const MODES = {
 
 // Sun skins
 const SUN_SKINS = [
+  { id: 'clay', name: '黏土饼', imagePath: 'images/clay-pie-skin.png', makeWhiteTransparent: true },
   { id: 'cartoon', name: '卡通', baseColor: '#FFD700', shadowColor: '#CC9900', faceColor: '#E8A000' },
   { id: 'watercolor', name: '水彩', baseColor: '#FFE082', shadowColor: '#D4A056', faceColor: '#D4A056' },
   { id: 'sketch', name: '简笔画', baseColor: '#FFF9C4', shadowColor: '#C0A030', faceColor: '#C0A030' },
@@ -92,7 +93,7 @@ const FACE_SLOT_POSITIONS = {
 
 // Sun configuration
 const SUN_CONFIG = {
-  radiusRatio: 0.18,
+  radiusRatio: 0.36,
   personifyRadiusRatio: 0.32,   // Larger sun in personify mode for face operations
   breathingMin: 0.95,
   breathingMax: 1.05,

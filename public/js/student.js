@@ -1,9 +1,14 @@
 const SHAPE_SIZE = 200;
+const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+if (prefersReducedMotion) {
+  SUN_CONFIG.breathingSpeed = 0; // 禁用呼吸动画
+}
 
 class StudentApp {
   constructor() {
     this.canvas = document.getElementById('main-canvas');
     this.ctx = this.canvas.getContext('2d');
+    this.breathingWrapper = document.getElementById('breathing-wrapper');
     this.shapePanel = document.getElementById('shape-panel');
     this.client = new SocketClient();
 
@@ -25,13 +30,34 @@ class StudentApp {
     this._syncTimer = null;
     this._syncPending = false;
 
+    // Session ID for reconnect handling
+    this.sessionId = sessionStorage.getItem('sun_decorator_sessionId');
+
+    // Socket state flags
+    this._socketConnecting = false;
+    this._socketConnected = false;
+    this._wasRegistered = false;
+
     this.faceMode = new FaceMode(this);
   }
 
   async init() {
     const loader = document.getElementById('loader');
     await AssetLoader.loadAll();
+
+    // Show start button
+    const startBtn = document.getElementById('btn-start');
+    if (startBtn) {
+      startBtn.hidden = false;
+      startBtn.addEventListener('click', () => this.startDrawing());
+    }
+  }
+
+  startDrawing() {
+    const loader = document.getElementById('loader');
     if (loader) loader.style.display = 'none';
+
+    this.enterFullscreen();
 
     this.setupCanvas();
     this.renderShapePanel();
@@ -43,6 +69,36 @@ class StudentApp {
     this.faceMode.init();
     this.updateModeUI();
     this.startAnimation();
+    this.setupFullscreen();
+  }
+
+  setupFullscreen() {
+    const exitBtn = document.getElementById('btn-exit-fullscreen');
+    if (exitBtn) {
+      exitBtn.hidden = false;
+      exitBtn.addEventListener('click', () => this.exitFullscreen());
+    }
+
+    // Listen for ESC to show exit button
+    document.addEventListener('fullscreenchange', () => {
+      if (exitBtn) {
+        exitBtn.hidden = !document.fullscreenElement;
+      }
+    });
+  }
+
+  async enterFullscreen() {
+    try {
+      await document.documentElement.requestFullscreen();
+    } catch (e) {
+      console.warn('Fullscreen not supported or denied');
+    }
+  }
+
+  exitFullscreen() {
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    }
   }
 
   setupCanvas() {
@@ -426,12 +482,29 @@ class StudentApp {
     }
   }
 
-  saveHistory() {
-    this.history.push({
+saveHistory() {
+    const last = this.history[this.history.length - 1];
+    const now = Date.now();
+
+    // 100ms 内的操作合并
+    if (last && now - last.timestamp < 100) {
+      last.shapes = JSON.parse(JSON.stringify(this.shapes));
+      last.faceParts = JSON.parse(JSON.stringify(this.faceParts));
+      // 不push新记录，更新timestamp
+      last.timestamp = now;
+      return;
+    }
+
+this.history.push({
       shapes: JSON.parse(JSON.stringify(this.shapes)),
-      faceParts: JSON.parse(JSON.stringify(this.faceParts))
+      faceParts: JSON.parse(JSON.stringify(this.faceParts)),
+      timestamp: now
     });
-    if (this.history.length > 20) this.history.shift();
+
+// 限制历史记录长度
+    if (this.history.length > 20) {
+      this.history.shift();
+    }
   }
 
   undo() {
@@ -462,20 +535,121 @@ class StudentApp {
   }
 
   connectSocket() {
+    // Prevent multiple socket connections
+    if (this._socketConnecting || this._socketConnected) {
+      console.log('Socket already connecting or connected, skipping');
+      return;
+    }
+
+    this._socketConnecting = true;
+
     this.client.connect();
+
+    // Set sessionId on client if we have one
+    if (this.sessionId) {
+      this.client.setSessionId(this.sessionId);
+    }
+
     this.client.registerStudent({ sunSkin: this.sunSkin });
 
+    // Handle socket.io connect event
+    this.client.on('connect', () => {
+      console.log('=== SOCKET CONNECT EVENT ===');
+      console.log('  sessionId:', this.sessionId);
+      console.log('  _wasRegistered:', this._wasRegistered);
+      console.log('  socket.id:', this.client.socket?.id);
+      this._socketConnected = true;
+      this._socketConnecting = false;
+
+      // Always register when connected - server will determine if it's a reconnect
+      if (this.sessionId) {
+        console.log('  Registering with sessionId:', this.sessionId);
+        this.client.registerStudent({ sunSkin: this.sunSkin });
+      }
+    });
+
+    // Monitor network status changes
+    window.addEventListener('online', () => {
+      console.log('=== NETWORK ONLINE EVENT ===');
+      console.log('  sessionId:', this.sessionId);
+      console.log('  socket.connected:', this.client.socket?.connected);
+      console.log('  socket.id:', this.client.socket?.id);
+
+      // If socket exists but not connected after network comes back,
+      // force a complete reconnection
+      if (this.client.socket && !this.client.socket.connected && this.sessionId) {
+        console.log('  Network is back but socket disconnected, forcing full reconnection...');
+        // Wait a bit for network to stabilize
+        setTimeout(() => {
+          if (!this.client.socket?.connected) {
+            console.log('  Still disconnected, recreating socket...');
+            this.client.forceReconnect();
+          }
+        }, 2000);
+      }
+    });
+
+    // No need for periodic checks - Socket.IO handles reconnection automatically
+
+    // Handle disconnect - show overlay and auto-lock
+    this.client.on('disconnect', (data) => {
+      console.log('STUDENT DISCONNECTED, reason:', data.reason);
+      this.locked = true;
+      this.updateLockUI();
+      this.showReconnectOverlay();
+    });
+
+    // Handle reconnect - hide overlay and restore state
+    this.client.on('reconnect', (data) => {
+      console.log('=== RECONNECT EVENT ===');
+      console.log('  this.sessionId:', this.sessionId);
+      console.log('  sessionStorage:', sessionStorage.getItem('sun_decorator_sessionId'));
+      console.log('  this._wasRegistered:', this._wasRegistered);
+      // Re-register with same sessionId only if we were registered before
+      if (this.sessionId && this._wasRegistered) {
+        console.log('  Re-registering with sessionId:', this.sessionId);
+        this.client.setSessionId(this.sessionId);
+        this.client.registerStudent({ sunSkin: this.sunSkin });
+      } else {
+        console.log('  Skipping re-registration, sessionId or _wasRegistered is false');
+      }
+    });
+
     this.client.on('init_state', (data) => {
+      console.log('Received init_state:', { isReconnect: data.isReconnect, shapes: data.state?.shapes?.length });
+      this._wasRegistered = true;
+      this._initStateReceived = true; // Mark that we received init_state
       this.mode = data.mode;
       this.locked = data.locked;
       this.updateLockUI();
+
+      // Save sessionId for future reconnects
+      if (data.sessionId) {
+        this.sessionId = data.sessionId;
+        sessionStorage.setItem('sun_decorator_sessionId', data.sessionId);
+        this.client.setSessionId(this.sessionId);
+        console.log('SessionId saved:', this.sessionId);
+      }
+
+      // If this is a reconnection, clear local state and use server state
+      if (data.isReconnect) {
+        console.log('Restoring state from server after reconnect');
+        this.shapes = [];
+        this.faceParts = [];
+      }
+
       if (data.state) {
         this.shapes = data.state.shapes || [];
         this.faceParts = data.state.faceParts || [];
         this.sunSkin = data.state.sunSkin || 'cartoon';
       }
+
       this.updateModeUI();
       this.render();
+
+      // Hide reconnect overlay after state is restored
+      this.hideReconnectOverlay();
+      console.log('init_state processed, locked:', this.locked);
     });
 
     this.client.on('mode_changed', (data) => {
@@ -532,19 +706,34 @@ class StudentApp {
     }
   }
 
+  showReconnectOverlay() {
+    const overlay = document.getElementById('reconnect-overlay');
+    if (overlay) {
+      overlay.classList.add('visible');
+      overlay.hidden = false;
+    }
+  }
+
+  hideReconnectOverlay() {
+    const overlay = document.getElementById('reconnect-overlay');
+    if (overlay) {
+      overlay.classList.remove('visible');
+      overlay.hidden = true;
+    }
+  }
+
+  _checkAndReconnect() {
+    // Just rely on Socket.IO's built-in reconnection
+    console.log('  Socket.IO will handle reconnection automatically');
+  }
+
   startAnimation() {
-    const animate = () => {
-      this.breathPhase += SUN_CONFIG.breathingSpeed;
-      if (this.breathPhase > Math.PI * 2) this.breathPhase = 0;
-
-      const breathScale = SUN_CONFIG.breathingMin +
-        (SUN_CONFIG.breathingMax - SUN_CONFIG.breathingMin) *
-        (Math.sin(this.breathPhase) + 1) / 2;
-
-      this.render(breathScale);
-      this.animationId = requestAnimationFrame(animate);
-    };
-    animate();
+    // Use CSS animation for breathing (GPU accelerated, no canvas re-render)
+    if (!prefersReducedMotion && this.breathingWrapper) {
+      this.breathingWrapper.classList.add('breathing');
+    }
+    // Initial render with breathScale=1 since CSS handles breathing
+    this.render();
   }
 
   render(breathScale = 1) {

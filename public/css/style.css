@@ -1,3 +1,27 @@
+/* ===== Design Tokens ===== */
+:root {
+  /* 颜色 */
+  --color-bg-primary: #FFE5EC;
+  --color-bg-secondary: #FFDAC1;
+  --color-accent-warm: #FFB366;
+  --color-accent-hot: #FF9933;
+  --color-text-primary: #E8A87C;
+  --color-text-secondary: #C0956E;
+  --color-face-skin: #FFCC99;
+  --color-face-outline: #E8A87C;
+
+  /* 圆角 */
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-full: 50%;
+
+  /* 阴影 */
+  --shadow-soft: 0 4px 16px rgba(0, 0, 0, 0.1);
+  --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.06);
+  --shadow-panel: 0 8px 32px rgba(0, 0, 0, 0.12);
+}
+
 /* ===== Reset & Base ===== */
 * {
   margin: 0;
@@ -14,7 +38,77 @@ html, body {
 }
 
 body {
-  background: linear-gradient(160deg, #FFE5EC 0%, #FFDAC1 40%, #FFF5E6 100%);
+  background: linear-gradient(160deg, var(--color-bg-primary) 0%, var(--color-bg-secondary) 40%, #FFF5E6 100%);
+}
+
+/* ===== Dark Mode ===== */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg-primary: #1a1520;
+    --color-bg-secondary: #2d2433;
+    --color-text-primary: #FFF5E6;
+    --color-text-secondary: #E8C4A8;
+  }
+
+  body {
+    background: linear-gradient(160deg, #1a1520 0%, #2d2433 40%, #1a1520 100%);
+  }
+
+  .side-panel {
+    background: var(--color-bg-secondary);
+  }
+
+  .tool-btn {
+    background: var(--color-bg-secondary);
+    color: var(--color-text-primary);
+  }
+
+  .tool-btn:hover {
+    background: var(--color-accent-warm);
+    color: #1a1520;
+  }
+
+  .student-card {
+    background: var(--color-bg-secondary);
+    color: var(--color-text-primary);
+  }
+
+  #header {
+    background: rgba(26, 21, 32, 0.95);
+  }
+
+  #main-canvas {
+    background: #2d2433;
+  }
+
+  .draw-modal-content {
+    background: var(--color-bg-secondary);
+  }
+}
+
+/* ===== Reduced Motion ===== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ===== Accessibility ===== */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* ===== Loading Screen ===== */
@@ -22,31 +116,141 @@ body {
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background: linear-gradient(160deg, #FFE5EC 0%, #FFDAC1 40%, #FFF5E6 100%);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 20px;
+}
+
+.loader-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  padding: 40px 60px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(10px);
+  border-radius: 30px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  position: relative;
+}
+
+/* Clay brush stroke decoration */
+.loader-content::before {
+  content: '';
+  position: absolute;
+  bottom: -15px;
+  left: -30px;
+  width: 120%;
+  height: 40px;
+  background: linear-gradient(90deg,
+    #FF9A56 0%, #FF6B35 15%, #FFB366 30%,
+    #FF9999 45%, #FF6666 60%, #FFB366 75%,
+    #FF9A56 90%, #FF6B35 100%);
+  border-radius: 20px;
+  opacity: 0.7;
+  transform: rotate(-2deg) scaleY(0.6);
+  z-index: -1;
+}
+
+.loader-content::after {
+  content: '';
+  position: absolute;
+  top: -20px;
+  right: -20px;
+  width: 80px;
+  height: 80px;
+  background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+  border-radius: 50% 20% 50% 20%;
+  opacity: 0.5;
+  transform: rotate(15deg);
 }
 
 .loader p {
   color: #E8A87C;
-  font-size: 18px;
-  font-weight: 500;
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: 2px;
 }
 
 .loader-sun {
-  width: 60px;
-  height: 60px;
+  width: 80px;
+  height: 80px;
   background: radial-gradient(circle, #FFD700 40%, #FFA500 100%);
   border-radius: 50%;
-  animation: pulse 1s ease-in-out infinite;
+  animation: pulse 1.2s ease-in-out infinite;
+  box-shadow: 0 0 40px rgba(255, 215, 0, 0.5);
 }
 
 @keyframes pulse {
   0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.15); opacity: 0.8; }
+  50% { transform: scale(1.15); opacity: 0.85; }
+}
+
+/* ===== Start Button ===== */
+.start-btn {
+  padding: 22px 72px;
+  font-size: 28px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #FF9A56 0%, #FF6B35 50%, #FF5555 100%);
+  border: none;
+  border-radius: 60px;
+  cursor: pointer;
+  box-shadow: 0 12px 32px rgba(255, 107, 53, 0.5), 0 4px 12px rgba(255, 80, 50, 0.3);
+  transition: transform 0.2s, box-shadow 0.2s;
+  letter-spacing: 3px;
+  position: relative;
+  overflow: hidden;
+}
+
+.start-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  transition: left 0.5s;
+}
+
+.start-btn:hover::before {
+  left: 100%;
+}
+
+.start-btn:hover {
+  transform: scale(1.06);
+  box-shadow: 0 16px 40px rgba(255, 107, 53, 0.6), 0 6px 16px rgba(255, 80, 50, 0.4);
+}
+
+.start-btn:active {
+  transform: scale(0.98);
+}
+
+/* ===== Exit Fullscreen Button ===== */
+.exit-fullscreen-btn {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 9999;
+  width: 44px;
+  height: 44px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.exit-fullscreen-btn:hover {
+  opacity: 1;
 }
 
 /* ===== Student App Layout ===== */
@@ -310,6 +514,22 @@ body {
   touch-action: none;
 }
 
+#breathing-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  will-change: transform;
+}
+
+#breathing-wrapper.breathing {
+  animation: breathing var(--breathing-duration, 4s) ease-in-out infinite;
+}
+
+@keyframes breathing {
+  0%, 100% { transform: scale(0.95); }
+  50% { transform: scale(1.05); }
+}
+
 /* ===== Color Palette Bar ===== */
 #color-bar {
   position: fixed;
@@ -517,6 +737,57 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* ===== Reconnect Overlay ===== */
+#reconnect-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+#reconnect-overlay.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.reconnect-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 40px 60px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  border-radius: 24px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+}
+
+.reconnect-spinner {
+  width: 56px;
+  height: 56px;
+  border: 4px solid rgba(255, 180, 100, 0.2);
+  border-top-color: #FF9933;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+#reconnect-overlay p {
+  color: #E8A87C;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 1px;
 }
 
 
@@ -1107,6 +1378,7 @@ body {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+  position: relative;
 }
 
 .student-card:hover {
@@ -1116,6 +1388,23 @@ body {
 
 .student-card.selected {
   border: 2px solid #4A90D9;
+}
+
+.student-card.disconnected {
+  opacity: 0.5;
+}
+
+.student-card.disconnected::after {
+  content: '离线';
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
 }
 
 .student-thumb {
@@ -1266,6 +1555,33 @@ body {
   .draw-canvas {
     width: 260px;
     height: 260px;
+  }
+}
+
+/* ===== Responsive Breakpoints ===== */
+/* Tablet portrait */
+@media (min-width: 601px) and (max-width: 900px) {
+  .side-panel {
+    width: 120px;
+  }
+
+  .student-card {
+    min-width: 160px;
+  }
+}
+
+/* Tablet landscape */
+@media (min-width: 901px) and (max-width: 1200px) {
+  .teacher-app {
+    max-width: 900px;
+  }
+}
+
+/* Large screens */
+@media (min-width: 1400px) {
+  #main-canvas {
+    max-width: 600px;
+    max-height: 600px;
   }
 }
 

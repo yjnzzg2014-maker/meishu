@@ -8,67 +8,85 @@
 </head>
 <body>
   <!-- Loading screen -->
-  <div id="loader" class="loader">
-    <div class="loader-sun"></div>
-    <p>正在准备画笔...</p>
+  <div id="loader" class="loader" style="background-image: url('images/classroom_bg.png'); background-size: cover; background-position: center;">
+    <div class="loader-content">
+      <div class="loader-sun"></div>
+      <p class="loader-text">正在准备画笔...</p>
+      <button id="btn-start" class="start-btn" hidden>开始制造太阳</button>
+    </div>
   </div>
+
+  <!-- Exit fullscreen button -->
+  <button id="btn-exit-fullscreen" class="exit-fullscreen-btn" hidden title="退出全屏">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg>
+  </button>
 
   <div id="app">
     <!-- Header -->
-    <div id="header">
-      <span id="mode-label">对称装饰模式</span>
+    <div id="header" role="banner">
+      <span id="mode-label" aria-live="polite" aria-atomic="true">对称装饰模式</span>
     </div>
 
     <!-- Shape panel (left side) - symmetric/free modes -->
-    <div id="shape-panel" class="side-panel visible">
+    <div id="shape-panel" class="side-panel visible" role="region" aria-label="素材面板">
       <div class="panel-header">素材</div>
-      <div class="category-tabs">
-        <button class="category-tab active" data-category="dots">点</button>
-        <button class="category-tab" data-category="lines">线</button>
+      <div class="category-tabs" role="tablist" aria-label="素材分类">
+        <button class="category-tab active" data-category="dots" role="tab" aria-selected="true" tabindex="0">点</button>
+        <button class="category-tab" data-category="lines" role="tab" aria-selected="false" tabindex="-1">线</button>
       </div>
-      <div id="shape-items" class="panel-grid"></div>
+      <div id="shape-items" class="panel-grid" role="tabpanel" aria-label="素材列表"></div>
     </div>
 
     <!-- Face panel (right side) - personify/free modes -->
-    <div id="face-panel" class="side-panel right">
+    <div id="face-panel" class="side-panel right" role="region" aria-label="五官面板">
       <div class="panel-header">五官</div>
     </div>
 
     <!-- Canvas area -->
     <div id="canvas-container">
-      <canvas id="main-canvas"></canvas>
+      <div id="breathing-wrapper">
+        <canvas id="main-canvas" role="img" aria-label="绘画画布"></canvas>
+      </div>
     </div>
 
     <!-- Color palette bar -->
-    <div id="color-bar" class="visible">
-      <div class="color-bar-label">调色</div>
-      <div id="color-palette"></div>
+    <div id="color-bar" class="visible" role="toolbar" aria-label="调色板">
+      <div class="color-bar-label" id="color-bar-title">调色</div>
+      <div id="color-palette" role="listbox" aria-labelledby="color-bar-title" aria-label="颜色选择"></div>
     </div>
 
     <!-- Sun skin selector (bottom) -->
-    <div id="skin-bar">
-      <div class="skin-bar-label">太阳皮肤</div>
-      <div id="skin-selector"></div>
+    <div id="skin-bar" role="toolbar" aria-label="太阳皮肤选择">
+      <div class="skin-bar-label" id="skin-bar-title">太阳皮肤</div>
+      <div id="skin-selector" role="listbox" aria-labelledby="skin-bar-title"></div>
     </div>
 
     <!-- Bottom toolbar -->
-    <div id="toolbar">
-      <button id="btn-undo" class="tool-btn">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10h13a4 4 0 0 1 0 8H7"/><path d="M3 10l4-4"/><path d="M3 10l4 4"/></svg>
+    <div id="toolbar" role="toolbar" aria-label="操作工具">
+      <button id="btn-undo" class="tool-btn" aria-label="撤销">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10h13a4 4 0 0 1 0 8H7"/><path d="M3 10l4-4"/><path d="M3 10l4 4"/></svg>
         <span>撤销</span>
       </button>
-      <button id="btn-clear" class="tool-btn">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M5 6v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6"/></svg>
+      <button id="btn-clear" class="tool-btn" aria-label="清空画布">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M5 6v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6"/></svg>
         <span>清空</span>
       </button>
     </div>
 
     <!-- Lock overlay -->
-    <div id="lock-overlay">
+    <div id="lock-overlay" role="alertdialog" aria-modal="true" aria-labelledby="lock-message" hidden>
       <div class="lock-icon">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
       </div>
-      <p>老师暂停了操作</p>
+      <p id="lock-message">老师暂停了操作</p>
+    </div>
+
+    <!-- Reconnect overlay -->
+    <div id="reconnect-overlay" role="alertdialog" aria-modal="true" aria-labelledby="reconnect-message" hidden>
+      <div class="reconnect-content">
+        <div class="reconnect-spinner"></div>
+        <p id="reconnect-message">断线重连中...</p>
+      </div>
     </div>
 
   </div>

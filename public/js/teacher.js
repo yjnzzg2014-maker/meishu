@@ -8,6 +8,7 @@ class TeacherApp {
     this.animationId = null;
     this.zoomedStudentId = null;
     this.selectedStudentId = null;
+    this.sunAnimation = null;
 
     // Drawing tool
     this.drawTool = null;
@@ -17,6 +18,14 @@ class TeacherApp {
 
     // Shape import state
     this.shapeImportData = null;
+
+    // Reduced motion preference
+    this.prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    // Disable animation if user prefers reduced motion
+    if (this.prefersReducedMotion) {
+      this.breathPhase = Math.PI; // Use middle point for breathing
+    }
 
     this.init();
   }
@@ -30,6 +39,7 @@ class TeacherApp {
     this.connectSocket();
     this.startAnimation();
     this.renderCustomAssets();
+    this.initStudentCardObserver();
   }
 
   setupControls() {
@@ -332,6 +342,22 @@ class TeacherApp {
     }
   }
 
+  initStudentCardObserver() {
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const studentId = entry.target.dataset.studentId;
+          this.renderStudentCanvas(studentId);
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { rootMargin: '100px' });
+
+    document.querySelectorAll('.student-card').forEach(card => {
+      observer.observe(card);
+    });
+  }
+
   setMode(mode) {
     this.mode = mode;
     this.client.changeMode(mode);
@@ -367,16 +393,81 @@ class TeacherApp {
     });
 
     this.client.on('student_joined', (data) => {
-      this.addStudentEntry(data.id, { shapes: [], faceParts: [], sunSkin: data.sunSkin, name: data.name });
+      // If this is a reconnect (student came back), find by sessionId and update
+      if (data.isReconnect && data.sessionId) {
+        // Find existing student by sessionId
+        let existingEntry = null;
+        let existingId = null;
+        this.students.forEach((entry, id) => {
+          if (entry.sessionId === data.sessionId) {
+            existingEntry = entry;
+            existingId = id;
+          }
+        });
+        if (existingEntry && existingId !== data.id) {
+          // Remove old entry and re-add with new id
+          this.students.delete(existingId);
+          existingEntry.disconnected = false;
+          existingEntry.name = data.name;
+          existingEntry.sunSkin = data.sunSkin;
+          this.students.set(data.id, existingEntry);
+          // Update the card's studentId
+          if (existingEntry.card) {
+            existingEntry.card.dataset.studentId = data.id;
+          }
+          this.updateStudentCard(data.id);
+          console.log(`Teacher: Student reconnected, updated entry from ${existingId} to ${data.id}`);
+          this.updateStudentCount();
+          return;
+        }
+      }
+
+      // If student already exists (reconnect), just mark as online
+      const existing = this.students.get(data.id);
+      if (existing) {
+        existing.disconnected = false;
+        existing.name = data.name;
+        existing.sunSkin = data.sunSkin;
+        this.updateStudentCard(data.id);
+      } else {
+        this.addStudentEntry(data.id, { shapes: [], faceParts: [], sunSkin: data.sunSkin, name: data.name, disconnected: false, sessionId: data.sessionId });
+      }
       this.updateStudentCount();
     });
 
     this.client.on('student_left', (data) => {
-      this.removeStudentEntry(data.id);
+      // Try to find by socket.id first, then by sessionId
+      let idToRemove = data.id;
+      if (data.sessionId) {
+        this.students.forEach((entry, id) => {
+          if (entry.sessionId === data.sessionId) {
+            idToRemove = id;
+          }
+        });
+      }
+      this.removeStudentEntry(idToRemove);
       this.updateStudentCount();
-      if (this.zoomedStudentId === data.id) {
+      if (this.zoomedStudentId === idToRemove) {
         this.closeZoom();
       }
+    });
+
+    this.client.on('student_disconnected', (data) => {
+      // Try to find by socket.id first, then by sessionId
+      let entry = this.students.get(data.id);
+      if (!entry && data.sessionId) {
+        this.students.forEach((e, id) => {
+          if (e.sessionId === data.sessionId) {
+            entry = e;
+            data.id = id; // Update the id to the actual key
+          }
+        });
+      }
+      if (entry) {
+        entry.disconnected = true;
+        this.updateStudentCard(data.id);
+      }
+      this.updateStudentCount();
     });
 
     this.client.on('student_updated', (data) => {
@@ -463,7 +554,8 @@ class TeacherApp {
       state: state,
       canvas: canvas,
       ctx: canvas.getContext('2d'),
-      card: card
+      card: card,
+      sessionId: state.sessionId || null
     });
   }
 
@@ -473,6 +565,13 @@ class TeacherApp {
       entry.card.remove();
     }
     this.students.delete(id);
+  }
+
+  updateStudentCard(id) {
+    const entry = this.students.get(id);
+    if (entry && entry.card) {
+      entry.card.classList.toggle('disconnected', !!entry.disconnected);
+    }
   }
 
   updateStudentCount() {
@@ -491,6 +590,18 @@ class TeacherApp {
     this.zoomedStudentId = id;
     const zoomView = document.getElementById('zoom-view');
     if (zoomView) zoomView.classList.add('visible');
+
+    // HD canvas support
+    const canvas = document.getElementById('zoom-canvas');
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = 500 * dpr;
+      canvas.height = 500 * dpr;
+      canvas.style.width = '500px';
+      canvas.style.height = '500px';
+      ctx.scale(dpr, dpr);
+    }
 
     this.client.getStudentState(id);
   }
@@ -513,6 +624,14 @@ class TeacherApp {
       this.renderAll(breathScale);
       this.animationId = requestAnimationFrame(animate);
     };
+
+    // Disable animation if user prefers reduced motion
+    if (this.prefersReducedMotion && this.animationId) {
+      cancelAnimationFrame(this.animationId);
+      this.animationId = null;
+      return;
+    }
+
     animate();
   }
 

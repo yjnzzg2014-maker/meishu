@@ -6,7 +6,10 @@ const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server, {
+  pingTimeout: 10000,  // 10s - faster disconnect detection
+  pingInterval: 5000   // 5s - more frequent pings
+});
 
 // --- Data persistence paths ---
 const DATA_DIR = path.join(__dirname, 'data');
@@ -148,10 +151,11 @@ app.delete('/api/faces/:id', (req, res) => {
 let globalMode = 'symmetric';
 let locked = false;
 
-const students = new Map();
+const students = new Map(); // socket.id -> { sessionId, shapes, faceParts, sunSkin, name, canvasRadius, _dirty, disconnected, disconnectedAt }
 const teachers = new Set();
 
 let summaryInterval = null;
+let cleanupInterval = null;
 
 io.on('connection', (socket) => {
   console.log(`Client connected: ${socket.id}`);
@@ -159,27 +163,76 @@ io.on('connection', (socket) => {
   // --- Student events ---
 
   socket.on('register_student', (data) => {
-    const studentState = {
-      shapes: [],
-      faceParts: [],
-      sunSkin: (data && data.sunSkin) || 'cartoon',
-      name: (data && data.name) || 'Student',
-      canvasRadius: 400,
-      _dirty: false
-    };
-    students.set(socket.id, studentState);
-    console.log(`Student registered: ${socket.id} (total: ${students.size})`);
+    const sessionId = (data && data.sessionId) || null;
+    let studentState = null;
+    let isReconnect = false;
+
+    console.log(`=== register_student ===`);
+    console.log(`  socket.id: ${socket.id}`);
+    console.log(`  sessionId: ${sessionId}`);
+    console.log(`  students map size: ${students.size}`);
+
+    // Debug: list all students
+    students.forEach((state, sockId) => {
+      console.log(`  [DEBUG] student: sockId=${sockId}, sessionId=${state.sessionId}, disconnected=${state.disconnected}`);
+    });
+
+    // Check if this is a reconnection - find existing state by sessionId with disconnected=true
+    if (sessionId) {
+      for (const [sockId, state] of students.entries()) {
+        if (state.sessionId === sessionId && state.disconnected) {
+          studentState = state;
+          isReconnect = true;
+          students.delete(sockId);
+          students.set(socket.id, studentState);
+          console.log(`Student RECONNECTED: socket.id=${socket.id}, sessionId=${sessionId}`);
+          break;
+        }
+      }
+    }
+
+    // If no reconnected state found, create new state
+    if (!studentState) {
+      studentState = {
+        sessionId: sessionId || ('sess_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)),
+        shapes: [],
+        faceParts: [],
+        sunSkin: (data && data.sunSkin) || 'cartoon',
+        name: (data && data.name) || 'Student',
+        canvasRadius: 400,
+        _dirty: false,
+        disconnected: false,
+        disconnectedAt: null
+      };
+      students.set(socket.id, studentState);
+      console.log(`Student registered: ${socket.id} (sessionId: ${studentState.sessionId}, total: ${students.size})`);
+    } else {
+      // Restore disconnected flag
+      studentState.disconnected = false;
+      studentState.disconnectedAt = null;
+    }
 
     socket.emit('init_state', {
       mode: globalMode,
       locked: locked,
-      state: studentState
+      state: {
+        shapes: studentState.shapes,
+        faceParts: studentState.faceParts,
+        sunSkin: studentState.sunSkin,
+        canvasRadius: studentState.canvasRadius
+      },
+      sessionId: studentState.sessionId,
+      isReconnect: isReconnect
     });
+    console.log(`Sent init_state to ${socket.id}: isReconnect=${isReconnect}, shapes=${studentState.shapes.length}`);
 
     broadcastToTeachers('student_joined', {
       id: socket.id,
+      sessionId: studentState.sessionId,
       name: studentState.name,
-      sunSkin: studentState.sunSkin
+      sunSkin: studentState.sunSkin,
+      disconnected: false,
+      isReconnect: isReconnect
     });
     broadcastStudentCount();
   });
@@ -211,7 +264,13 @@ io.on('connection', (socket) => {
 
     const studentList = [];
     students.forEach((state, id) => {
-      studentList.push({ id, ...state });
+      studentList.push({
+        id,
+        sessionId: state.sessionId,
+        name: state.name,
+        sunSkin: state.sunSkin,
+        disconnected: !!state.disconnected
+      });
     });
 
     socket.emit('teacher_init', {
@@ -250,21 +309,25 @@ io.on('connection', (socket) => {
     if (!teachers.has(socket.id)) return;
     const list = [];
     students.forEach((state, id) => {
-      list.push({ id, name: state.name, sunSkin: state.sunSkin });
+      list.push({ id, sessionId: state.sessionId, name: state.name, sunSkin: state.sunSkin, disconnected: !!state.disconnected });
     });
     socket.emit('student_list', list);
   });
 
   // --- Disconnect ---
 
-  socket.on('disconnect', () => {
-    console.log(`Client disconnected: ${socket.id}`);
+  socket.on('disconnect', (reason) => {
+    console.log(`Client DISCONNECTED: ${socket.id}, reason: ${reason}`);
 
     if (students.has(socket.id)) {
-      students.delete(socket.id);
-      broadcastToTeachers('student_left', { id: socket.id });
-      broadcastStudentCount();
-      console.log(`Student removed (remaining: ${students.size})`);
+      const student = students.get(socket.id);
+      const wasDisconnected = student.disconnected;
+      student.disconnected = true;
+      student.disconnectedAt = Date.now();
+      if (!wasDisconnected) {
+        broadcastToTeachers('student_disconnected', { id: socket.id, sessionId: student.sessionId });
+        console.log(`Student marked disconnected: ${socket.id} (sessionId: ${student.sessionId}, remaining active: ${getActiveStudentCount()})`);
+      }
     }
 
     if (teachers.has(socket.id)) {
@@ -283,10 +346,37 @@ function broadcastToTeachers(event, data) {
   });
 }
 
+function getActiveStudentCount() {
+  let count = 0;
+  students.forEach(state => {
+    if (!state.disconnected) count++;
+  });
+  return count;
+}
+
 function broadcastStudentCount() {
-  const count = students.size;
+  const count = getActiveStudentCount();
   io.emit('student_count', { count });
 }
+
+// Cleanup disconnected students older than 30 minutes
+const DISCONNECTED_CLEANUP_MS = 30 * 60 * 1000;
+cleanupInterval = setInterval(() => {
+  const now = Date.now();
+  const toDelete = [];
+  students.forEach((state, socketId) => {
+    if (state.disconnected && state.disconnectedAt && (now - state.disconnectedAt > DISCONNECTED_CLEANUP_MS)) {
+      toDelete.push(socketId);
+    }
+  });
+  toDelete.forEach(socketId => {
+    students.delete(socketId);
+    console.log(`Cleaned up disconnected student: ${socketId}`);
+  });
+  if (toDelete.length > 0) {
+    broadcastStudentCount();
+  }
+}, 60 * 1000); // Run every minute
 
 // Periodic batch push to teachers (every 2 seconds)
 summaryInterval = setInterval(() => {

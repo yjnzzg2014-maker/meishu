@@ -2,3 +2,8 @@ node_modules/
 .DS_Store
 .playwright-cli/
 data/
+.idea/
+.playwright-mcp/
+public/assets/custom/
+slides/
+docs/superpowers/specs/*.md

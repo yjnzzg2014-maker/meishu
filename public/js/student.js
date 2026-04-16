@@ -57,7 +57,7 @@ class StudentApp {
     const loader = document.getElementById('loader');
     if (loader) loader.style.display = 'none';
 
-    this.enterFullscreen();
+    this.toggleFullscreen();
 
     this.setupCanvas();
     this.renderShapePanel();
@@ -76,10 +76,10 @@ class StudentApp {
     const exitBtn = document.getElementById('btn-exit-fullscreen');
     if (exitBtn) {
       exitBtn.hidden = false;
-      exitBtn.addEventListener('click', () => this.exitFullscreen());
+      exitBtn.addEventListener('click', () => this.toggleFullscreen());
     }
 
-    // Listen for ESC to show exit button
+    // Listen for ESC to update button visibility
     document.addEventListener('fullscreenchange', () => {
       if (exitBtn) {
         exitBtn.hidden = !document.fullscreenElement;
@@ -87,17 +87,15 @@ class StudentApp {
     });
   }
 
-  async enterFullscreen() {
+  async toggleFullscreen() {
     try {
-      await document.documentElement.requestFullscreen();
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      } else {
+        await document.documentElement.requestFullscreen();
+      }
     } catch (e) {
       console.warn('Fullscreen not supported or denied');
-    }
-  }
-
-  exitFullscreen() {
-    if (document.fullscreenElement) {
-      document.exitFullscreen();
     }
   }
 

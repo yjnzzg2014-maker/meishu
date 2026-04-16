@@ -732,33 +732,34 @@ this.history.push({
   }
 
   startAnimation() {
-    // Use CSS animation for breathing (GPU accelerated, no canvas re-render)
-    if (!prefersReducedMotion && this.breathingWrapper) {
-      this.breathingWrapper.classList.add('breathing');
+    // Subtle sun-only breathing animation
+    if (!prefersReducedMotion && SUN_CONFIG.breathingSpeed > 0) {
+      let breathPhase = 0;
+      const animate = () => {
+        breathPhase += SUN_CONFIG.breathingSpeed;
+        const breathScale = 1 + Math.sin(breathPhase) * 0.02; // Subtle 2% variation
+        this.render(breathScale);
+        this._breathAnimFrame = requestAnimationFrame(animate);
+      };
+      animate();
+    } else {
+      this.render();
     }
-    // Initial render with breathScale=1 since CSS handles breathing
-    this.render();
   }
 
   render(breathScale = 1) {
     const ctx = this.ctx;
+    const canvasSize = this.canvasRadius * 2;
+    const left = this.centerX - this.canvasRadius;
+    const top = this.centerY - this.canvasRadius;
 
-    const bgGradient = ctx.createRadialGradient(
-      this.centerX, this.centerY, 0,
-      this.centerX, this.centerY, this.canvasRadius
-    );
-    bgGradient.addColorStop(0, '#FFF8E7');
-    bgGradient.addColorStop(0.7, '#FFE8D0');
-    bgGradient.addColorStop(1, '#FFDAB3');
-
-    ctx.fillStyle = bgGradient;
-    ctx.beginPath();
-    ctx.arc(this.centerX, this.centerY, this.canvasRadius, 0, Math.PI * 2);
-    ctx.fill();
+    // White square background
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(left, top, canvasSize, canvasSize);
 
     ctx.save();
     ctx.beginPath();
-    ctx.arc(this.centerX, this.centerY, this.canvasRadius - 3, 0, Math.PI * 2);
+    ctx.rect(left, top, canvasSize, canvasSize);
     ctx.clip();
 
     drawSun(ctx, this.centerX, this.centerY, this.canvasRadius, this.sunSkin, breathScale, this.mode);

@@ -651,18 +651,9 @@ class TeacherApp {
     const h = entry.canvas.height;
     const cx = w / 2, cy = h / 2, r = w / 2 - 5;
 
-    const bg = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-    bg.addColorStop(0, '#FFF8E7');
-    bg.addColorStop(0.7, '#FFE8D0');
-    bg.addColorStop(1, '#FFDAB3');
-    ctx.fillStyle = bg;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.fill();
-
     ctx.save();
     ctx.beginPath();
-    ctx.arc(cx, cy, r - 2, 0, Math.PI * 2);
+    ctx.rect(0, 0, w, h);
     ctx.clip();
 
     const skinId = (entry.state && entry.state.sunSkin) || 'cartoon';
@@ -724,18 +715,9 @@ class TeacherApp {
     const h = canvas.height;
     const cx = w / 2, cy = h / 2, r = w / 2 - 5;
 
-    const bg = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-    bg.addColorStop(0, '#FFF8E7');
-    bg.addColorStop(0.7, '#FFE8D0');
-    bg.addColorStop(1, '#FFDAB3');
-    ctx.fillStyle = bg;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.fill();
-
     ctx.save();
     ctx.beginPath();
-    ctx.arc(cx, cy, r - 2, 0, Math.PI * 2);
+    ctx.rect(0, 0, w, h);
     ctx.clip();
 
     const skinId = (entry.state && entry.state.sunSkin) || 'cartoon';

@@ -77,10 +77,6 @@ body {
     background: rgba(26, 21, 32, 0.95);
   }
 
-  #main-canvas {
-    background: #2d2433;
-  }
-
   .draw-modal-content {
     background: var(--color-bg-secondary);
   }
@@ -507,32 +503,17 @@ body {
 }
 
 #main-canvas {
-  border-radius: 50%;
-  box-shadow:
-    0 4px 30px rgba(255, 180, 50, 0.25),
-    0 0 0 3px rgba(255, 255, 255, 0.5);
+  border-radius: 0;
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  user-select: none;
 }
 
 #breathing-wrapper {
   display: flex;
   align-items: center;
   justify-content: center;
-  will-change: transform;
-}
-
-#breathing-wrapper.breathing {
-  animation: breathing var(--breathing-duration, 4s) ease-in-out infinite;
-}
-
-@keyframes breathing {
-  0%, 100% { transform: scale(0.95); }
-  50% { transform: scale(1.05); }
 }
 
 /* ===== Color Palette Bar ===== */

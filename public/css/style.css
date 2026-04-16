@@ -323,8 +323,9 @@ body {
 
 .panel-header {
   padding: 10px 12px 6px;
-  font-size: 13px;
+  font-size: 17px;
   font-weight: 600;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.15);
   color: #E8A87C;
   text-align: center;
   flex-shrink: 0;
@@ -537,12 +538,13 @@ body {
 .color-hue-row.selected-hue { background: rgba(255, 200, 150, 0.3); }
 
 .color-hue-name {
-  font-size: 11px;
+  font-size: 15px;
   color: #C0956E;
   font-weight: 700;
-  width: 16px;
+  width: 20px;
   flex-shrink: 0;
   text-align: center;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.1);
 }
 
 .color-hue-bar {

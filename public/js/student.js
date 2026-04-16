@@ -18,7 +18,7 @@ class StudentApp {
     this.selectedFacePart = null;
     this.dragOffset = { x: 0, y: 0 };
     this.mode = 'symmetric';
-    this.sunSkin = 'cartoon';
+    this.sunSkin = 'clay';
     this.locked = false;
     this.breathPhase = 0;
     this.animationId = null;

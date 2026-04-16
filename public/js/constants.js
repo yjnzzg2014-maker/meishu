@@ -38,6 +38,9 @@ const MODES = {
 // Sun skins
 const SUN_SKINS = [
   { id: 'clay', name: '黏土饼', imagePath: 'images/clay-pie-skin.png', makeWhiteTransparent: true },
+  { id: 'clay-morning', name: '早安', imagePath: 'images/clay-pie-morning-t.png', makeWhiteTransparent: true },
+  { id: 'clay-tomato', name: '番茄', imagePath: 'images/clay-pie-tomato-t.png', makeWhiteTransparent: true },
+  { id: 'clay-purple', name: '紫罗', imagePath: 'images/clay-pie-purple-t.png', makeWhiteTransparent: true },
   { id: 'cartoon', name: '卡通', baseColor: '#FFD700', shadowColor: '#CC9900', faceColor: '#E8A000' },
   { id: 'watercolor', name: '水彩', baseColor: '#FFE082', shadowColor: '#D4A056', faceColor: '#D4A056' },
   { id: 'sketch', name: '简笔画', baseColor: '#FFF9C4', shadowColor: '#C0A030', faceColor: '#C0A030' },

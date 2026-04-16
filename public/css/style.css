@@ -274,7 +274,7 @@ body {
 }
 
 #mode-label {
-  font-size: 15px;
+  font-size: 18px;
   font-weight: 600;
   color: #E8A87C;
   letter-spacing: 1px;
@@ -323,7 +323,7 @@ body {
 
 .panel-header {
   padding: 10px 12px 6px;
-  font-size: 17px;
+  font-size: 20px;
   font-weight: 600;
   text-shadow: 0 1px 3px rgba(0,0,0,0.15);
   color: #E8A87C;
@@ -343,7 +343,7 @@ body {
   padding: 5px 0;
   border: none;
   border-radius: 10px;
-  font-size: 12px;
+  font-size: 15px;
   cursor: pointer;
   background: rgba(255, 200, 150, 0.2);
   color: #C0956E;
@@ -426,14 +426,14 @@ body {
 }
 
 .shape-label, .face-label {
-  font-size: 11px;
+  font-size: 14px;
   color: #B0886A;
   font-weight: 500;
   line-height: 1;
 }
 
 .face-label {
-  font-size: 13px;
+  font-size: 16px;
 }
 
 /* Face panel specifics */
@@ -447,16 +447,17 @@ body {
 
 .face-tab {
   flex: 1;
-  padding: 8px 0;
+  padding: 10px 0;
   border: none;
   border-radius: 10px;
-  font-size: 13px;
+  font-size: 15px;
   cursor: pointer;
   background: rgba(255, 200, 150, 0.2);
   color: #C0956E;
   transition: all 0.2s ease;
   font-weight: 500;
   min-width: 50px;
+  min-height: 44px;
 }
 
 .face-tab.active {
@@ -621,7 +622,7 @@ body {
 }
 
 .color-bar-label {
-  font-size: 12px;
+  font-size: 14px;
   color: #C0956E;
   font-weight: 500;
   white-space: nowrap;
@@ -687,7 +688,7 @@ body {
 }
 
 .skin-bar-label {
-  font-size: 12px;
+  font-size: 15px;
   color: #C0956E;
   font-weight: 500;
   white-space: nowrap;
@@ -722,7 +723,7 @@ body {
 }
 
 .skin-btn span {
-  font-size: 10px;
+  font-size: 12px;
   color: #B0886A;
 }
 
@@ -747,13 +748,14 @@ body {
   display: flex;
   align-items: center;
   gap: 5px;
-  padding: 8px 18px;
+  padding: 10px 20px;
   border: none;
   border-radius: 14px;
   background: rgba(255, 200, 150, 0.2);
   color: #C0956E;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 500;
+  min-height: 44px;
   cursor: pointer;
   transition: all 0.15s ease;
 }

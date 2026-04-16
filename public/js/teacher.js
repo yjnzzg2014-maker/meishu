@@ -668,11 +668,6 @@ class TeacherApp {
       shapes.forEach(shape => {
         const scaled = this.scaleShapeForThumb(shape, scaleFactor, cx, cy, studentCanvasRadius);
         drawShape(ctx, scaled, scaled.size);
-
-        const mirrors = getMirroredPositions(scaled, cx, cy);
-        mirrors.slice(1).forEach(pos => {
-          drawShape(ctx, { ...scaled, x: pos.x, y: pos.y, angle: pos.angle }, scaled.size);
-        });
       });
     }
 
@@ -732,10 +727,6 @@ class TeacherApp {
       shapes.forEach(shape => {
         const scaled = this.scaleShapeForThumb(shape, scaleFactor, cx, cy, studentCanvasRadius);
         drawShape(ctx, scaled, scaled.size);
-        const mirrors = getMirroredPositions(scaled, cx, cy);
-        mirrors.slice(1).forEach(pos => {
-          drawShape(ctx, { ...scaled, x: pos.x, y: pos.y, angle: pos.angle }, scaled.size);
-        });
       });
     }
 

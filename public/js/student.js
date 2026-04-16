@@ -216,6 +216,14 @@ class StudentApp {
     });
   }
 
+  updateSkinSelectorUI() {
+    const container = document.getElementById('skin-selector');
+    if (!container) return;
+    container.querySelectorAll('.skin-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.skinId === this.sunSkin);
+    });
+  }
+
   setupToolbar() {
     const undoBtn = document.getElementById('btn-undo');
     const clearBtn = document.getElementById('btn-clear');
@@ -435,27 +443,14 @@ class StudentApp {
   }
 
   findShapeAt(x, y) {
-    // In symmetric mode, check all mirror positions; otherwise just the shape position
     for (let i = this.shapes.length - 1; i >= 0; i--) {
       const shape = this.shapes[i];
       const hitSize = (shape.size * (shape.scale || 1)) / 2 + 15;
 
-      if (this.mode === 'symmetric') {
-        // Check all 4 mirror positions
-        const mirrors = getMirroredPositions(shape, this.centerX, this.centerY);
-        for (const pos of mirrors) {
-          const dx = x - pos.x;
-          const dy = y - pos.y;
-          if (Math.sqrt(dx * dx + dy * dy) < hitSize) {
-            return shape;
-          }
-        }
-      } else {
-        const dx = x - shape.x;
-        const dy = y - shape.y;
-        if (Math.sqrt(dx * dx + dy * dy) < hitSize) {
-          return shape;
-        }
+      const dx = x - shape.x;
+      const dy = y - shape.y;
+      if (Math.sqrt(dx * dx + dy * dy) < hitSize) {
+        return shape;
       }
     }
     return null;
@@ -643,7 +638,8 @@ this.history.push({
       if (data.state) {
         this.shapes = data.state.shapes || [];
         this.faceParts = data.state.faceParts || [];
-        this.sunSkin = data.state.sunSkin || 'cartoon';
+        this.sunSkin = data.state.sunSkin || this.sunSkin;
+        this.updateSkinSelectorUI();
       }
 
       this.updateModeUI();
@@ -762,37 +758,20 @@ this.history.push({
 
     drawSun(ctx, this.centerX, this.centerY, this.canvasRadius, this.sunSkin, breathScale, this.mode);
 
-    if (this.mode === 'symmetric') {
-      this.renderSymmetric(ctx);
-    } else if (this.mode === 'personify') {
-      this.renderFaceParts(ctx);
-    } else {
-      this.renderSymmetric(ctx);
+    this.renderShapes(ctx);
+
+    if (this.mode === 'personify' || this.mode === 'free') {
       this.renderFaceParts(ctx);
     }
 
     ctx.restore();
 
-    if (this.mode === 'symmetric' || this.mode === 'free') {
-      this.renderSymmetryGuides(ctx);
-    }
-
     this.renderSelectionHighlight(ctx);
   }
 
-  renderSymmetric(ctx) {
+  renderShapes(ctx) {
     this.shapes.forEach(shape => {
       drawShape(ctx, shape, shape.size);
-      const mirrors = getMirroredPositions(shape, this.centerX, this.centerY);
-      mirrors.slice(1).forEach(pos => {
-        const mirroredShape = {
-          ...shape,
-          x: pos.x,
-          y: pos.y,
-          angle: pos.angle
-        };
-        drawShape(ctx, mirroredShape, shape.size);
-      });
     });
   }
 
@@ -801,19 +780,6 @@ this.history.push({
     this.faceParts.forEach(part => {
       drawFacePart(ctx, part, this.centerX, this.centerY, sunR);
     });
-  }
-
-  renderSymmetryGuides(ctx) {
-    ctx.strokeStyle = 'rgba(255, 180, 100, 0.35)';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([10, 10]);
-    ctx.beginPath();
-    ctx.moveTo(this.centerX, this.centerY - this.canvasRadius);
-    ctx.lineTo(this.centerX, this.centerY + this.canvasRadius);
-    ctx.moveTo(this.centerX - this.canvasRadius, this.centerY);
-    ctx.lineTo(this.centerX + this.canvasRadius, this.centerY);
-    ctx.stroke();
-    ctx.setLineDash([]);
   }
 
   renderSelectionHighlight(ctx) {

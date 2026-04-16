@@ -197,7 +197,7 @@ io.on('connection', (socket) => {
         sessionId: sessionId || ('sess_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)),
         shapes: [],
         faceParts: [],
-        sunSkin: (data && data.sunSkin) || 'cartoon',
+        sunSkin: (data && data.sunSkin) || 'clay',
         name: (data && data.name) || 'Student',
         canvasRadius: 400,
         _dirty: false,

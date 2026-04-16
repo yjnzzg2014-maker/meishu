@@ -25,6 +25,7 @@ class StudentApp {
     this.history = [];
     this.activeShapeCategory = 'dots';
     this.selectedTintColor = null; // Current tint color selection
+    this._expandedHue = null; // current expanded hue key in color panel
 
     // Throttle state
     this._syncTimer = null;
@@ -61,7 +62,7 @@ class StudentApp {
 
     this.setupCanvas();
     this.renderShapePanel();
-    this.renderColorPalette();
+    this.renderColorPanel();
     this.setupSkinSelector();
     this.setupToolbar();
     this.setupTouchHandlers();
@@ -100,8 +101,14 @@ class StudentApp {
   }
 
   setupCanvas() {
-    const container = document.getElementById('canvas-container');
-    const size = Math.min(container.clientWidth, container.clientHeight) - 20;
+    const headerH = 44;
+    const toolbarH = 50;
+    const skinBarH = 44;
+    const padding = 20;
+
+    const availW = window.innerWidth;
+    const availH = window.innerHeight - headerH - toolbarH - skinBarH;
+    const size = Math.max(100, Math.min(availW, availH) - padding);
     const canvasSize = size * 2;
 
     this.canvas.width = canvasSize;
@@ -112,6 +119,13 @@ class StudentApp {
     this.centerX = canvasSize / 2;
     this.centerY = canvasSize / 2;
     this.canvasRadius = canvasSize / 2;
+
+    // Dynamically set panel widths to fill remaining side space
+    const panelW = Math.max(64, Math.floor((availW - size) / 2));
+    ['shape-panel', 'face-panel', 'color-panel'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.width = panelW + 'px';
+    });
   }
 
   renderShapePanel() {
@@ -169,6 +183,93 @@ class StudentApp {
 
       container.appendChild(swatch);
     });
+  }
+
+  renderColorPanel() {
+    const list = document.getElementById('color-rainbow-list');
+    if (!list) return;
+    list.innerHTML = '';
+    list.appendChild(this._buildHueRow(null));
+    TINT_COLOR_GROUPS.forEach(g => list.appendChild(this._buildHueRow(g)));
+  }
+
+  _buildHueRow(group) {
+    const isNoTint = group === null;
+    const hueKey = isNoTint ? '__no_tint__' : group.hue;
+    const wrapper = document.createElement('div');
+
+    const row = document.createElement('div');
+    row.className = 'color-hue-row' + (this._isHueSelected(group) ? ' selected-hue' : '');
+    row.setAttribute('role', 'button');
+    row.setAttribute('aria-label', isNoTint ? '原色（无染色）' : group.name + '色系');
+
+    const name = document.createElement('span');
+    name.className = 'color-hue-name';
+    name.textContent = isNoTint ? '原' : group.name;
+    row.appendChild(name);
+
+    if (isNoTint) {
+      row.appendChild(Object.assign(document.createElement('div'), { className: 'no-tint-bar' }));
+    } else {
+      const bar = document.createElement('div');
+      bar.className = 'color-hue-bar';
+      group.shades.forEach(shade => {
+        const seg = document.createElement('div');
+        seg.className = 'color-hue-bar-segment';
+        seg.style.background = shade;
+        bar.appendChild(seg);
+      });
+      row.appendChild(bar);
+    }
+
+    const indicator = document.createElement('div');
+    indicator.className = 'color-hue-indicator';
+    const curShade = isNoTint ? null : this._currentShadeForHue(group);
+    if (curShade) indicator.style.background = curShade;
+    row.appendChild(indicator);
+
+    row.addEventListener('click', () => {
+      if (isNoTint) {
+        this.selectedTintColor = null;
+        this._expandedHue = null;
+      } else {
+        this._expandedHue = (this._expandedHue === hueKey) ? null : hueKey;
+      }
+      this.renderColorPanel();
+    });
+
+    wrapper.appendChild(row);
+
+    if (!isNoTint) {
+      const grid = document.createElement('div');
+      grid.className = 'shade-grid' + (this._expandedHue === hueKey ? ' expanded' : '');
+      group.shades.forEach(shade => {
+        const sw = document.createElement('button');
+        sw.className = 'shade-swatch' + (this.selectedTintColor === shade ? ' active' : '');
+        sw.style.background = shade;
+        sw.setAttribute('aria-label', shade);
+        sw.addEventListener('click', e => {
+          e.stopPropagation();
+          this.selectedTintColor = shade;
+          this._expandedHue = null;
+          this.renderColorPanel();
+        });
+        grid.appendChild(sw);
+      });
+      wrapper.appendChild(grid);
+    }
+
+    return wrapper;
+  }
+
+  _isHueSelected(group) {
+    if (group === null) return this.selectedTintColor === null;
+    return group.shades.includes(this.selectedTintColor);
+  }
+
+  _currentShadeForHue(group) {
+    if (!group) return null;
+    return group.shades.find(s => s === this.selectedTintColor) || null;
   }
 
   setupCategoryTabs() {
@@ -673,27 +774,20 @@ this.history.push({
   updateModeUI() {
     const modeLabel = document.getElementById('mode-label');
     const shapePanel = document.getElementById('shape-panel');
+    const colorPanel = document.getElementById('color-panel');
 
-    const labels = {
-      symmetric: '对称装饰模式',
-      personify: '拟人化模式',
-      free: '自由模式'
-    };
+    const labels = { symmetric: '装饰模式', personify: '人脸模式' };
     if (modeLabel) modeLabel.textContent = labels[this.mode] || '';
 
-    if (shapePanel) {
-      shapePanel.classList.toggle('visible', this.mode === 'symmetric' || this.mode === 'free');
-    }
-    if (this.mode === 'personify' || this.mode === 'free') {
+    const isDecorate = this.mode === 'symmetric';
+
+    if (shapePanel) shapePanel.classList.toggle('visible', isDecorate);
+    if (colorPanel) colorPanel.classList.toggle('visible', isDecorate);
+
+    if (this.mode === 'personify') {
       this.faceMode.show();
     } else {
       this.faceMode.hide();
-    }
-
-    // Show/hide color palette based on mode
-    const colorBar = document.getElementById('color-bar');
-    if (colorBar) {
-      colorBar.classList.toggle('visible', this.mode === 'symmetric' || this.mode === 'free');
     }
   }
 

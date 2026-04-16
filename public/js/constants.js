@@ -4,19 +4,21 @@ const COLORS = {
   sunGlow: '#FFA500'
 };
 
-// Tint color palette for shapes
-const TINT_COLORS = [
-  null,        // No tint (original)
-  '#E74C3C',   // Red
-  '#E67E22',   // Orange
-  '#F1C40F',   // Yellow
-  '#2ECC71',   // Green
-  '#3498DB',   // Blue
-  '#9B59B6',   // Purple
-  '#E91E90',   // Pink
-  '#8B4513',   // Brown
-  '#2C3E50',   // Dark
+// Tint color groups: 9 families × 5 shades (light → dark)
+const TINT_COLOR_GROUPS = [
+  { name: '红', hue: 'red',    shades: ['#FFCDD2','#EF9A9A','#E74C3C','#C0392B','#7B1010'] },
+  { name: '橙', hue: 'orange', shades: ['#FFE0B2','#FFCC80','#E67E22','#E65100','#7B3000'] },
+  { name: '黄', hue: 'yellow', shades: ['#FFFDE7','#FFF176','#F1C40F','#F9A825','#876400'] },
+  { name: '绿', hue: 'green',  shades: ['#DCEDC8','#A5D6A7','#2ECC71','#1E8449','#0D4D26'] },
+  { name: '蓝', hue: 'blue',   shades: ['#BBDEFB','#90CAF9','#3498DB','#1565C0','#0A2463'] },
+  { name: '紫', hue: 'purple', shades: ['#EDE7F6','#CE93D8','#9B59B6','#6A1B9A','#2D0050'] },
+  { name: '粉', hue: 'pink',   shades: ['#FCE4EC','#F48FB1','#E91E90','#AD1457','#560027'] },
+  { name: '棕', hue: 'brown',  shades: ['#FFD9B3','#E8A87C','#C07A40','#8B4513','#4A2C0A'] },
+  { name: '黑', hue: 'dark',   shades: ['#CFD8DC','#90A4AE','#607D8B','#2C3E50','#101820'] },
 ];
+
+// Derived flat list (mid shade per family + null for no-tint) - backwards compat
+const TINT_COLORS = [null, ...TINT_COLOR_GROUPS.map(g => g.shades[2])];
 
 // Shape categories: dots and lines
 const SHAPE_CATEGORIES = [

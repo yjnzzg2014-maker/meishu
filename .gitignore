@@ -7,3 +7,11 @@ data/
 public/assets/custom/
 slides/
 docs/superpowers/specs/*.md
+.worktrees/
+api_response.json
+dev.js
+generate_bg.js
+clay_pie_*.jpg
+clay_pie_*.png
+public/images/clay-pie-*.png
+public/images/classroom_bg.png

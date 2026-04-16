@@ -37,9 +37,15 @@
       <div id="shape-items" class="panel-grid" role="tabpanel" aria-label="素材列表"></div>
     </div>
 
-    <!-- Face panel (right side) - personify/free modes -->
-    <div id="face-panel" class="side-panel right" role="region" aria-label="五官面板">
+    <!-- Face panel (left side) - personify mode -->
+    <div id="face-panel" class="side-panel" role="region" aria-label="五官面板">
       <div class="panel-header">五官</div>
+    </div>
+
+    <!-- Color panel (right side) - 装饰模式 -->
+    <div id="color-panel" class="side-panel right" role="region" aria-label="调色盘">
+      <div class="panel-header">颜色</div>
+      <div id="color-rainbow-list" class="panel-grid color-list" role="listbox" aria-label="颜色选择"></div>
     </div>
 
     <!-- Canvas area -->
@@ -47,12 +53,6 @@
       <div id="breathing-wrapper">
         <canvas id="main-canvas" role="img" aria-label="绘画画布"></canvas>
       </div>
-    </div>
-
-    <!-- Color palette bar -->
-    <div id="color-bar" class="visible" role="toolbar" aria-label="调色板">
-      <div class="color-bar-label" id="color-bar-title">调色</div>
-      <div id="color-palette" role="listbox" aria-labelledby="color-bar-title" aria-label="颜色选择"></div>
     </div>
 
     <!-- Sun skin selector (bottom) -->

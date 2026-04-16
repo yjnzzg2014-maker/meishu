@@ -4,6 +4,9 @@ node_modules/
 data/
 .idea/
 .playwright-mcp/
+.playwright-results/
 public/assets/custom/
 slides/
 docs/superpowers/specs/*.md
+docs/superpowers/plans/*.md
+.worktrees/

@@ -58,23 +58,9 @@ body {
     background: var(--color-bg-secondary);
   }
 
-  .tool-btn {
-    background: var(--color-bg-secondary);
-    color: var(--color-text-primary);
-  }
-
-  .tool-btn:hover {
-    background: var(--color-accent-warm);
-    color: #1a1520;
-  }
-
   .student-card {
     background: var(--color-bg-secondary);
     color: var(--color-text-primary);
-  }
-
-  #header {
-    background: rgba(26, 21, 32, 0.95);
   }
 
   .draw-modal-content {
@@ -257,34 +243,103 @@ body {
   position: relative;
 }
 
-/* Header */
-#header {
+/* 浮动模式胶囊（替代 #header） */
+#mode-capsule {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 50;
-  background: rgba(255, 255, 255, 0.6);
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  padding: 6px 20px;
+  background: rgba(255, 255, 255, 0.82);
   backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(255, 200, 150, 0.3);
+  border-radius: 999px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.10);
+  pointer-events: none;
+  white-space: nowrap;
 }
-
-#mode-label {
-  font-size: 18px;
+#mode-capsule #mode-label {
+  font-size: 15px;
   font-weight: 600;
   color: #E8A87C;
   letter-spacing: 1px;
 }
 
+/* 画布浮动操作栏（替代 #toolbar） */
+#canvas-toolbar {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 55;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(16px);
+  border-radius: 999px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+  max-width: calc(100vw - 40px);
+}
+.canvas-tool-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: #C0956E;
+  font-size: 12px;
+  font-weight: 500;
+  min-width: 48px;
+  min-height: 44px;
+  cursor: pointer;
+  transition: background 0.15s ease, opacity 0.15s ease, transform 0.1s ease;
+}
+.canvas-tool-btn:active { background: rgba(255,200,150,0.35); transform: scale(0.92); }
+.canvas-tool-btn.danger { color: #E74C3C; }
+.canvas-tool-btn.selection-only { opacity: 0.3; pointer-events: none; }
+.canvas-tool-btn.selection-only.active { opacity: 1; pointer-events: auto; }
+.canvas-toolbar-divider { width: 1px; height: 28px; background: rgba(200,150,100,0.25); margin: 0 2px; }
+
+/* 面板内嵌皮肤栏 */
+#skin-bar-inline {
+  flex-shrink: 0;
+  padding: 8px 10px;
+  border-top: 1px solid rgba(255, 200, 150, 0.3);
+}
+#skin-bar-inline .skin-bar-label {
+  font-size: 12px; color: #C0956E; font-weight: 500;
+  text-align: center; margin-bottom: 6px;
+}
+#skin-bar-inline #skin-selector {
+  display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;
+}
+#skin-bar-inline .skin-btn canvas { width: 32px; height: 32px; }
+#skin-bar-inline .skin-btn span { font-size: 11px; }
+
+/* 重叠指示器 */
+#overlap-indicator {
+  position: fixed;
+  z-index: 56;
+  background: rgba(0,0,0,0.55);
+  color: white;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  pointer-events: none;
+}
+#overlap-indicator[hidden] { display: none; }
+
 /* ===== Side Panels (Shape + Face) ===== */
 .side-panel {
   position: fixed;
-  top: 44px;
-  bottom: 50px;
+  top: 0;
+  bottom: 0;
   width: auto;
   z-index: 40;
   background: rgba(255, 255, 255, 0.75);
@@ -322,8 +377,8 @@ body {
 }
 
 .panel-header {
-  padding: 10px 12px 6px;
-  font-size: 20px;
+  padding: 8px 6px 4px;
+  font-size: 15px;
   font-weight: 600;
   text-shadow: 0 1px 3px rgba(0,0,0,0.15);
   color: #E8A87C;
@@ -340,10 +395,10 @@ body {
 
 .category-tab {
   flex: 1;
-  padding: 5px 0;
+  padding: 4px 0;
   border: none;
   border-radius: 10px;
-  font-size: 15px;
+  font-size: 13px;
   cursor: pointer;
   background: rgba(255, 200, 150, 0.2);
   color: #C0956E;
@@ -361,10 +416,10 @@ body {
 .panel-grid {
   flex: 1;
   overflow-y: auto;
-  padding: 6px 8px 12px;
+  padding: 4px 6px 8px;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
+  gap: 6px;
   align-content: start;
   -webkit-overflow-scrolling: touch;
 }
@@ -378,7 +433,7 @@ body {
 /* 统一项目卡片 */
 .shape-item, .face-item {
   width: auto;
-  min-height: 64px;
+  min-height: 56px;
   aspect-ratio: 1;
   display: flex;
   flex-direction: column;
@@ -390,7 +445,7 @@ body {
   background: white;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
-  padding: 8px 4px;
+  padding: 5px 3px;
 }
 
 .face-item {
@@ -426,7 +481,7 @@ body {
 }
 
 .shape-label, .face-label {
-  font-size: 14px;
+  font-size: 11px;
   color: #B0886A;
   font-weight: 500;
   line-height: 1;
@@ -506,7 +561,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 50px 10px 96px;
+  padding: 0;
 }
 
 #main-canvas {
@@ -670,35 +725,7 @@ body {
   transform: translate(-50%, -50%) rotate(-45deg);
 }
 
-/* ===== Skin Selector Bar ===== */
-#skin-bar {
-  position: fixed;
-  bottom: 52px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 45;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(12px);
-  border-radius: 20px;
-  padding: 6px 14px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-}
-
-.skin-bar-label {
-  font-size: 15px;
-  color: #C0956E;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-#skin-selector {
-  display: flex;
-  gap: 8px;
-}
-
+/* skin-btn (used inside #skin-bar-inline) */
 .skin-btn {
   display: flex;
   flex-direction: column;
@@ -725,48 +752,6 @@ body {
 .skin-btn span {
   font-size: 12px;
   color: #B0886A;
-}
-
-/* ===== Bottom Toolbar ===== */
-#toolbar {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 50px;
-  z-index: 45;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 24px;
-  background: rgba(255, 255, 255, 0.75);
-  backdrop-filter: blur(12px);
-  border-top: 1px solid rgba(255, 200, 150, 0.3);
-}
-
-.tool-btn {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 10px 20px;
-  border: none;
-  border-radius: 14px;
-  background: rgba(255, 200, 150, 0.2);
-  color: #C0956E;
-  font-size: 15px;
-  font-weight: 500;
-  min-height: 44px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.tool-btn:active {
-  transform: scale(0.93);
-  background: rgba(255, 200, 150, 0.4);
-}
-
-.tool-btn svg {
-  flex-shrink: 0;
 }
 
 /* ===== Lock Overlay ===== */
@@ -863,11 +848,13 @@ body {
    =================================================== */
 
 #teacher-app {
-  min-height: 100vh;
+  height: 100vh;
   padding: 20px 24px 40px;
   max-width: 1100px;
   margin: 0 auto;
   overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
 }
 
 .teacher-header {
@@ -1026,6 +1013,35 @@ body {
 
 .action-btn.accent:hover {
   opacity: 0.9;
+}
+
+/* ===== Tooltip ===== */
+.has-tip {
+  position: relative;
+}
+.has-tip::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(30, 20, 10, 0.88);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+  white-space: nowrap;
+  padding: 5px 10px;
+  border-radius: 8px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  transform: translateX(-50%) translateY(4px);
+  z-index: 9999;
+}
+.has-tip:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
 }
 
 .asset-group {
@@ -1572,28 +1588,6 @@ body {
     font-size: 12px;
   }
 
-  #skin-bar {
-    bottom: 50px;
-    padding: 4px 10px;
-    gap: 6px;
-  }
-
-  .skin-bar-label {
-    display: none;
-  }
-
-  #toolbar {
-    height: 46px;
-  }
-
-  #header {
-    height: 38px;
-  }
-
-  #canvas-container {
-    padding: 42px 6px 96px;
-  }
-
   .draw-body {
     flex-direction: column;
     align-items: center;
@@ -1636,4 +1630,102 @@ body {
 
 .student-card {
   animation: fadeIn 0.3s ease both;
+}
+
+/* ===== Fruit name inside mode capsule ===== */
+.capsule-fruit {
+  font-size: 15px;
+  font-weight: 700;
+  color: #E8A87C;
+  letter-spacing: 0.5px;
+}
+.capsule-sep {
+  font-size: 13px;
+  color: #D4956A;
+  margin: 0 5px;
+  opacity: 0.6;
+}
+
+/* ===== Showcase Self-Notice Banner ===== */
+#showcase-self-notice {
+  position: fixed;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 20px;
+  background: rgba(255, 160, 40, 0.92);
+  backdrop-filter: blur(8px);
+  border-radius: 999px;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  pointer-events: none;
+  white-space: nowrap;
+  box-shadow: 0 4px 16px rgba(255, 140, 0, 0.35);
+  animation: noticeSlideIn 0.3s ease both;
+}
+#showcase-self-notice[hidden] { display: none; }
+.showcase-notice-icon { font-size: 18px; }
+@keyframes noticeSlideIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* ===== Showcase Overlay ===== */
+#showcase-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  background: rgba(0, 0, 0, 0.88);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+#showcase-overlay[hidden] { display: none; }
+.showcase-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+#showcase-fruit-name {
+  color: #FFE0A0;
+  font-size: 28px;
+  font-weight: 700;
+}
+.showcase-badge {
+  background: rgba(255, 180, 60, 0.85);
+  color: #fff;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+}
+#showcase-canvas {
+  border-radius: 16px;
+  box-shadow: 0 0 60px rgba(255, 200, 80, 0.4);
+}
+
+/* ===== Gallery Overlay ===== */
+#gallery-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  background: #000;
+}
+#gallery-overlay[hidden] { display: none; }
+#gallery-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+/* ===== Teacher Gallery Select ===== */
+.student-card.gallery-selected {
+  outline: 3px solid #FFB800;
+  outline-offset: 2px;
 }

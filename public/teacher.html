@@ -41,6 +41,23 @@
         <button id="btn-lock" class="lock-btn" aria-pressed="false">锁定操作</button>
       </div>
 
+      <!-- Clear all -->
+      <div class="control-group">
+        <button id="btn-clear-all" class="action-btn danger has-tip" data-tip="断开所有学生连接并清空画板，学生将自动重新加入">清除全部</button>
+      </div>
+
+      <!-- Showcase controls -->
+      <div class="control-group" id="showcase-group">
+        <button id="btn-showcase" class="action-btn has-tip" disabled data-tip="将选中学生的作品全屏展示给所有人">展示</button>
+        <button id="btn-stop-showcase" class="action-btn danger has-tip" hidden data-tip="结束当前展示，恢复正常视图">结束展示</button>
+      </div>
+      <!-- Gallery controls -->
+      <div class="control-group" id="gallery-group">
+        <button id="btn-gallery-select" class="action-btn has-tip" data-tip="勾选多位学生，然后开始展廊动画">选择展廊</button>
+        <button id="btn-start-gallery" class="action-btn accent has-tip" hidden data-tip="在所有学生端播放星空悬挂画廊动画">开始展廊</button>
+        <button id="btn-stop-gallery" class="action-btn danger has-tip" hidden data-tip="关闭所有学生端的展廊动画">结束展廊</button>
+      </div>
+
     </div>
 
     <!-- Asset Management Section -->
@@ -139,6 +156,20 @@
       <div id="student-grid" role="list" aria-label="学生作品列表" aria-live="polite"></div>
       <div id="empty-state" class="empty-state" role="status">
         <p>等待学生加入...</p>
+      </div>
+    </div>
+
+    <!-- Showcase mode dialog -->
+    <div id="showcase-dialog" class="draw-modal" role="dialog" aria-modal="true" hidden>
+      <div class="draw-modal-content" style="max-width:300px">
+        <div class="draw-modal-header">
+          <h3>展示方式</h3>
+          <button class="draw-close-btn" id="showcase-dialog-close" aria-label="关闭">&times;</button>
+        </div>
+        <div class="draw-body" style="flex-direction:column;gap:12px;padding:20px">
+          <button id="btn-showcase-frozen" class="action-btn" style="width:100%">冻结画布展示</button>
+          <button id="btn-showcase-live" class="action-btn accent" style="width:100%">实时展示</button>
+        </div>
       </div>
     </div>
 

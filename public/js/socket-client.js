@@ -25,42 +25,6 @@ class SocketClient {
     this._initializeSocket();
     this.socket.connect();
     return this;
-
-    // Reconnection events
-    this.socket.on('reconnect', () => {
-      console.log('Socket reconnected, sessionId:', this.sessionId);
-      this.trigger('reconnect', { sessionId: this.sessionId });
-    });
-
-    this.socket.on('reconnect_attempt', (attemptNumber) => {
-      console.log('Reconnect attempt:', attemptNumber);
-    });
-
-    this.socket.on('reconnect_error', (error) => {
-      console.error('Reconnect error:', error);
-    });
-
-    this.socket.on('disconnect', (reason) => {
-      console.log('Socket disconnected:', reason);
-      this._registered = false; // Reset so we can register again on reconnect
-      this.trigger('disconnect', { reason });
-    });
-
-    const events = [
-      'init_state', 'mode_changed', 'lock_changed', 'student_count',
-      // Teacher-specific events
-      'teacher_init', 'student_joined', 'student_left', 'student_disconnected',
-      'student_updated', 'student_state', 'student_list',
-      'students_summary',
-      // Asset sync
-      'assets_updated'
-    ];
-
-    events.forEach(event => {
-      this.socket.on(event, (data) => this.trigger(event, data));
-    });
-
-    return this;
   }
 
   on(event, callback) {
@@ -161,7 +125,12 @@ class SocketClient {
       'student_updated', 'student_state', 'student_list',
       'students_summary',
       // Asset sync
-      'assets_updated'
+      'assets_updated',
+      // Showcase & Gallery
+      'showcase_start', 'showcase_update', 'showcase_end',
+      'gallery_start', 'gallery_end',
+      'showcase_status', 'gallery_status',
+      'force_reset', 'all_students_cleared'
     ];
 
     events.forEach(event => {
@@ -205,5 +174,25 @@ class SocketClient {
 
   getStudentList() {
     this.socket.emit('get_student_list');
+  }
+
+  startShowcase(studentId, freezeStudent) {
+    this.socket.emit('start_showcase', { studentId, freezeStudent });
+  }
+
+  stopShowcase() {
+    this.socket.emit('stop_showcase');
+  }
+
+  startGallery(studentIds) {
+    this.socket.emit('start_gallery', { studentIds });
+  }
+
+  stopGallery() {
+    this.socket.emit('stop_gallery');
+  }
+
+  clearAllStudents() {
+    this.socket.emit('clear_all_students');
   }
 }

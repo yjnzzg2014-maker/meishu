@@ -19,6 +19,10 @@ class TeacherApp {
     // Shape import state
     this.shapeImportData = null;
 
+    // Gallery selection state
+    this.gallerySelectMode = false;
+    this.gallerySelectedIds = new Set();
+
     // Reduced motion preference
     this.prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -66,6 +70,65 @@ class TeacherApp {
     const closeZoom = document.getElementById('close-zoom');
     if (closeZoom) {
       closeZoom.addEventListener('click', () => this.closeZoom());
+    }
+
+    // Clear all students
+    document.getElementById('btn-clear-all')?.addEventListener('click', () => {
+      if (!confirm('确定清除所有学生？学生端将断开连接、清空画板并重新加入。')) return;
+      this.client.clearAllStudents();
+    });
+
+    // Showcase controls
+    const showcaseBtn = document.getElementById('btn-showcase');
+    const stopShowcaseBtn = document.getElementById('btn-stop-showcase');
+    const showcaseDialog = document.getElementById('showcase-dialog');
+
+    if (showcaseBtn) {
+      showcaseBtn.addEventListener('click', () => {
+        if (this.selectedStudentId) {
+          showcaseDialog?.classList.add('visible');
+        }
+      });
+    }
+    document.getElementById('showcase-dialog-close')?.addEventListener('click', () => {
+      showcaseDialog?.classList.remove('visible');
+    });
+    document.getElementById('btn-showcase-frozen')?.addEventListener('click', () => {
+      showcaseDialog?.classList.remove('visible');
+      if (this.selectedStudentId) this.client.startShowcase(this.selectedStudentId, true);
+    });
+    document.getElementById('btn-showcase-live')?.addEventListener('click', () => {
+      showcaseDialog?.classList.remove('visible');
+      if (this.selectedStudentId) this.client.startShowcase(this.selectedStudentId, false);
+    });
+    if (stopShowcaseBtn) {
+      stopShowcaseBtn.addEventListener('click', () => this.client.stopShowcase());
+    }
+
+    // Gallery controls
+    const gallerySelectBtn = document.getElementById('btn-gallery-select');
+    const startGalleryBtn = document.getElementById('btn-start-gallery');
+    const stopGalleryBtn = document.getElementById('btn-stop-gallery');
+
+    if (gallerySelectBtn) {
+      gallerySelectBtn.addEventListener('click', () => {
+        this.gallerySelectMode = !this.gallerySelectMode;
+        gallerySelectBtn.classList.toggle('active', this.gallerySelectMode);
+        if (!this.gallerySelectMode) {
+          this.gallerySelectedIds.clear();
+          document.querySelectorAll('.student-card.gallery-selected').forEach(c => c.classList.remove('gallery-selected'));
+          if (startGalleryBtn) startGalleryBtn.hidden = true;
+        }
+      });
+    }
+    if (startGalleryBtn) {
+      startGalleryBtn.addEventListener('click', () => {
+        const ids = [...this.gallerySelectedIds];
+        if (ids.length > 0) this.client.startGallery(ids);
+      });
+    }
+    if (stopGalleryBtn) {
+      stopGalleryBtn.addEventListener('click', () => this.client.stopGallery());
     }
   }
 
@@ -410,6 +473,7 @@ class TeacherApp {
           existingEntry.disconnected = false;
           existingEntry.name = data.name;
           existingEntry.sunSkin = data.sunSkin;
+          if (data.fruitName) existingEntry.fruitName = data.fruitName;
           this.students.set(data.id, existingEntry);
           // Update the card's studentId
           if (existingEntry.card) {
@@ -428,9 +492,10 @@ class TeacherApp {
         existing.disconnected = false;
         existing.name = data.name;
         existing.sunSkin = data.sunSkin;
+        if (data.fruitName) existing.fruitName = data.fruitName;
         this.updateStudentCard(data.id);
       } else {
-        this.addStudentEntry(data.id, { shapes: [], faceParts: [], sunSkin: data.sunSkin, name: data.name, disconnected: false, sessionId: data.sessionId });
+        this.addStudentEntry(data.id, { shapes: [], faceParts: [], sunSkin: data.sunSkin, name: data.name, disconnected: false, sessionId: data.sessionId, fruitName: data.fruitName || null });
       }
       this.updateStudentCount();
     });
@@ -503,6 +568,53 @@ class TeacherApp {
       const entry = this.students.get(data.id);
       if (entry) entry.state = data.state;
     });
+
+    this.client.on('showcase_status', (data) => {
+      const showcaseBtn = document.getElementById('btn-showcase');
+      const stopBtn = document.getElementById('btn-stop-showcase');
+      if (data.active) {
+        if (showcaseBtn) showcaseBtn.hidden = true;
+        if (stopBtn) stopBtn.hidden = false;
+      } else {
+        if (showcaseBtn) { showcaseBtn.hidden = false; }
+        if (stopBtn) stopBtn.hidden = true;
+      }
+    });
+
+    this.client.on('gallery_status', (data) => {
+      const startBtn = document.getElementById('btn-start-gallery');
+      const stopBtn = document.getElementById('btn-stop-gallery');
+      const selectBtn = document.getElementById('btn-gallery-select');
+      if (data.active) {
+        if (startBtn) startBtn.hidden = true;
+        if (stopBtn) stopBtn.hidden = false;
+        if (selectBtn) selectBtn.hidden = true;
+      } else {
+        if (stopBtn) stopBtn.hidden = true;
+        if (startBtn) startBtn.hidden = true;
+        if (selectBtn) selectBtn.hidden = false;
+        this.gallerySelectMode = false;
+        this.gallerySelectedIds.clear();
+        document.querySelectorAll('.student-card.gallery-selected').forEach(c => c.classList.remove('gallery-selected'));
+        selectBtn?.classList.remove('active');
+      }
+    });
+
+    this.client.on('all_students_cleared', () => {
+      // Remove all student cards from UI
+      this.students.forEach((entry) => {
+        if (entry.card) entry.card.remove();
+      });
+      this.students.clear();
+      this.selectedStudentId = null;
+      this.zoomedStudentId = null;
+      this.gallerySelectedIds.clear();
+      this.gallerySelectMode = false;
+      this.closeZoom();
+      this.updateStudentCount();
+      const showcaseBtn = document.getElementById('btn-showcase');
+      if (showcaseBtn) showcaseBtn.disabled = true;
+    });
   }
 
   addStudentEntry(id, state) {
@@ -526,16 +638,31 @@ class TeacherApp {
 
     const label = document.createElement('div');
     label.className = 'student-label';
-    label.textContent = state.name || 'Student';
+    label.textContent = state.fruitName || state.name || 'Student';
     card.appendChild(label);
 
     card.addEventListener('click', () => {
+      if (this.gallerySelectMode) {
+        if (this.gallerySelectedIds.has(id)) {
+          this.gallerySelectedIds.delete(id);
+          card.classList.remove('gallery-selected');
+        } else {
+          this.gallerySelectedIds.add(id);
+          card.classList.add('gallery-selected');
+        }
+        const startBtn = document.getElementById('btn-start-gallery');
+        if (startBtn) startBtn.hidden = this.gallerySelectedIds.size === 0;
+        return;
+      }
+
       if (this.selectedStudentId === id) {
         // 取消选中并关闭放大
         this.selectedStudentId = null;
         this.zoomedStudentId = null;
         card.classList.remove('selected');
         this.closeZoom();
+        const showcaseBtn = document.getElementById('btn-showcase');
+        if (showcaseBtn) showcaseBtn.disabled = true;
       } else {
         // 选中并放大
         if (this.selectedStudentId) {
@@ -545,6 +672,8 @@ class TeacherApp {
         this.selectedStudentId = id;
         card.classList.add('selected');
         this.zoomStudent(id);
+        const showcaseBtn = document.getElementById('btn-showcase');
+        if (showcaseBtn) showcaseBtn.disabled = false;
       }
     });
 
@@ -555,7 +684,8 @@ class TeacherApp {
       canvas: canvas,
       ctx: canvas.getContext('2d'),
       card: card,
-      sessionId: state.sessionId || null
+      sessionId: state.sessionId || null,
+      fruitName: state.fruitName || null
     });
   }
 

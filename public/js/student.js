@@ -17,6 +17,13 @@ class StudentApp {
     this.selectedShape = null;
     this.selectedFacePart = null;
     this.dragOffset = { x: 0, y: 0 };
+
+    // Tap-to-cycle state for overlapping shapes
+    this._lastTapPos = null;
+    this._lastTapTime = 0;
+    this._cycleIndex = 0;
+    this._cycleShapes = [];
+
     this.mode = 'symmetric';
     this.sunSkin = 'clay';
     this.locked = false;
@@ -32,7 +39,13 @@ class StudentApp {
     this._syncPending = false;
 
     // Session ID for reconnect handling
-    this.sessionId = sessionStorage.getItem('sun_decorator_sessionId');
+    this.sessionId = localStorage.getItem('sun_decorator_sessionId');
+
+    // Fruit name assigned by server
+    this.fruitName = null;
+
+    // Gallery animation instance
+    this._galleryAnimation = null;
 
     // Socket state flags
     this._socketConnecting = false;
@@ -80,11 +93,19 @@ class StudentApp {
       exitBtn.addEventListener('click', () => this.toggleFullscreen());
     }
 
-    // Listen for ESC to update button visibility
+    // 全屏状态变化时重新计算画布和面板尺寸
     document.addEventListener('fullscreenchange', () => {
       if (exitBtn) {
         exitBtn.hidden = !document.fullscreenElement;
       }
+      this.setupCanvas();
+      this.render();
+    });
+
+    // 窗口 resize 时同步重算（旋转屏幕、分屏等场景）
+    window.addEventListener('resize', () => {
+      this.setupCanvas();
+      this.render();
     });
   }
 
@@ -101,16 +122,16 @@ class StudentApp {
   }
 
   setupCanvas() {
-    const headerH = 44;
-    const toolbarH = 50;
-    const skinBarH = 44;
-    const padding = 20;
-
     const availW = window.innerWidth;
-    const availH = window.innerHeight - headerH - toolbarH - skinBarH;
-    const size = Math.max(100, Math.min(availW, availH) - padding);
-    const canvasSize = size * 2;
+    const availH = window.innerHeight;
 
+    // 画布 = min(vw, vh)，不再减去 16px gap → 横屏正好填满高度
+    const size = Math.max(100, Math.min(availW, availH));
+
+    // panelW：两侧剩余空间各取一半，完整填满画布两侧；下限 64px 兜底竖屏/方屏
+    const panelW = Math.max(64, Math.floor((availW - size) / 2));
+
+    const canvasSize = size * 2;
     this.canvas.width = canvasSize;
     this.canvas.height = canvasSize;
     this.canvas.style.width = size + 'px';
@@ -120,8 +141,6 @@ class StudentApp {
     this.centerY = canvasSize / 2;
     this.canvasRadius = canvasSize / 2;
 
-    // Dynamically set panel widths to fill remaining side space
-    const panelW = Math.max(64, Math.floor((availW - size) / 2));
     ['shape-panel', 'face-panel', 'color-panel'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.style.width = panelW + 'px';
@@ -326,17 +345,51 @@ class StudentApp {
   }
 
   setupToolbar() {
-    const undoBtn = document.getElementById('btn-undo');
-    const clearBtn = document.getElementById('btn-clear');
-
-    if (undoBtn) {
-      undoBtn.addEventListener('click', () => this.undo());
-    }
-    if (clearBtn) {
-      clearBtn.addEventListener('click', () => this.clearAll());
-    }
-
+    document.getElementById('btn-undo')?.addEventListener('click', () => this.undo());
+    document.getElementById('btn-clear')?.addEventListener('click', () => this.clearAll());
+    document.getElementById('btn-copy')?.addEventListener('click', () => this.copySelected());
+    document.getElementById('btn-delete')?.addEventListener('click', () => this.deleteSelected());
     this.setupCategoryTabs();
+  }
+
+  setSelectedShape(shape) {
+    this.selectedShape = shape;
+    this._updateSelectionToolbar();
+  }
+
+  _updateSelectionToolbar() {
+    const hasSelection = !!(this.selectedShape || this.selectedFacePart);
+    ['btn-copy', 'btn-delete'].forEach(id => {
+      const btn = document.getElementById(id);
+      if (!btn) return;
+      btn.classList.toggle('active', hasSelection);
+      btn.disabled = !hasSelection;
+    });
+  }
+
+  copySelected() {
+    if (!this.selectedShape) return;
+    this.saveHistory();
+    const clone = {
+      ...JSON.parse(JSON.stringify(this.selectedShape)),
+      id: Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+      x: this.selectedShape.x + 30,
+      y: this.selectedShape.y + 30,
+    };
+    this.shapes.push(clone);
+    this.setSelectedShape(clone);
+    this.syncToServer();
+    this.render();
+  }
+
+  deleteSelected() {
+    if (!this.selectedShape) return;
+    this.saveHistory();
+    this.shapes = this.shapes.filter(s => s.id !== this.selectedShape.id);
+    this.setSelectedShape(null);
+    this._hideCycleIndicator();
+    this.syncToServer();
+    this.render();
   }
 
   addShape(type) {
@@ -414,17 +467,18 @@ class StudentApp {
           const py = this.centerY + this.selectedFacePart.offsetY;
           this.dragOffset.x = x - px;
           this.dragOffset.y = y - py;
-          this.selectedShape = null;
+          this.setSelectedShape(null);
           this.canvas.setPointerCapture(e.pointerId);
           return;
         }
       }
 
       if (this.mode === 'symmetric' || this.mode === 'free') {
-        this.selectedShape = this.findShapeAt(x, y);
-        if (this.selectedShape) {
-          this.dragOffset.x = x - this.selectedShape.x;
-          this.dragOffset.y = y - this.selectedShape.y;
+        const found = this.findShapeAt(x, y);
+        this.setSelectedShape(found);
+        if (found) {
+          this.dragOffset.x = x - found.x;
+          this.dragOffset.y = y - found.y;
           this.selectedFacePart = null;
           this.canvas.setPointerCapture(e.pointerId);
           this.saveHistory();
@@ -473,12 +527,15 @@ class StudentApp {
         const dy = this.selectedShape.y - this.centerY;
         if (Math.sqrt(dx * dx + dy * dy) > this.canvasRadius + SHAPE_SIZE) {
           this.shapes = this.shapes.filter(s => s.id !== this.selectedShape.id);
+          this.setSelectedShape(null);
           this.syncToServer();
           this.render();
+          try { this.canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+          return;
         }
       }
 
-      this.selectedShape = null;
+      // 仅结束 face part 拖拽；shape 选中保持，直到用户点击空白区域
       this.selectedFacePart = null;
       try { this.canvas.releasePointerCapture(e.pointerId); } catch (_) {}
     });
@@ -531,6 +588,24 @@ class StudentApp {
         this._flushSync();
       }
     }, { passive: true });
+
+    // touchcancel: 系统中断（如来电、通知、导航栏滑动）时重置 pinch 状态
+    this.canvas.addEventListener('touchcancel', (e) => {
+      if (e.touches.length < 2) {
+        isPinching = false;
+        initialPinchDist = 0;
+        this._flushSync();
+      }
+    }, { passive: true });
+
+    // pointercancel: 指针被系统中断时重置主指针状态，防止所有后续 pointer 事件被阻塞
+    this.canvas.addEventListener('pointercancel', (e) => {
+      if (e.pointerId === primaryPointerId) {
+        primaryPointerId = null;
+        this._flushSync();
+        try { this.canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+      }
+    });
   }
 
   canvasCoords(e) {
@@ -543,18 +618,63 @@ class StudentApp {
     };
   }
 
-  findShapeAt(x, y) {
+  findShapesAt(x, y) {
+    const hits = [];
     for (let i = this.shapes.length - 1; i >= 0; i--) {
       const shape = this.shapes[i];
       const hitSize = (shape.size * (shape.scale || 1)) / 2 + 15;
-
-      const dx = x - shape.x;
-      const dy = y - shape.y;
-      if (Math.sqrt(dx * dx + dy * dy) < hitSize) {
-        return shape;
-      }
+      const dx = x - shape.x, dy = y - shape.y;
+      if (Math.sqrt(dx * dx + dy * dy) < hitSize) hits.push(shape);
     }
-    return null;
+    return hits;
+  }
+
+  findShapeAt(x, y) {
+    const CYCLE_R = 40;
+    const CYCLE_TIMEOUT = 1200;
+    const now = Date.now();
+    const hits = this.findShapesAt(x, y);
+
+    if (hits.length === 0) {
+      this._lastTapPos = null; this._cycleShapes = []; this._hideCycleIndicator();
+      return null;
+    }
+    if (hits.length === 1) {
+      this._lastTapPos = { x, y }; this._lastTapTime = now;
+      this._cycleIndex = 0; this._cycleShapes = hits; this._hideCycleIndicator();
+      return hits[0];
+    }
+
+    const isSamePos = this._lastTapPos &&
+      Math.hypot(x - this._lastTapPos.x, y - this._lastTapPos.y) < CYCLE_R;
+    const isRecent = (now - this._lastTapTime) < CYCLE_TIMEOUT;
+
+    if (isSamePos && isRecent) {
+      this._cycleIndex = (this._cycleIndex + 1) % hits.length;
+    } else {
+      this._cycleIndex = 0;
+    }
+    this._lastTapPos = { x, y }; this._lastTapTime = now; this._cycleShapes = hits;
+    this._showCycleIndicator(x, y, this._cycleIndex + 1, hits.length);
+    return hits[this._cycleIndex];
+  }
+
+  _showCycleIndicator(canvasX, canvasY, current, total) {
+    const el = document.getElementById('overlap-indicator');
+    const counter = document.getElementById('overlap-counter');
+    if (!el || !counter) return;
+    counter.textContent = `${current}/${total}`;
+    el.hidden = false;
+    const rect = this.canvas.getBoundingClientRect();
+    const sx = rect.left + canvasX * (rect.width / this.canvas.width);
+    const sy = rect.top  + canvasY * (rect.height / this.canvas.height);
+    el.style.left = (sx + 16) + 'px';
+    el.style.top  = (sy - 32) + 'px';
+  }
+
+  _hideCycleIndicator() {
+    const el = document.getElementById('overlap-indicator');
+    if (el) el.hidden = true;
   }
 
   throttledSync() {
@@ -610,6 +730,9 @@ this.history.push({
     const prev = this.history.pop();
     this.shapes = prev.shapes;
     this.faceParts = prev.faceParts;
+    this._lastTapPos = null; this._cycleShapes = [];
+    this.setSelectedShape(null);
+    this._hideCycleIndicator();
     this.syncToServer();
     this.render();
   }
@@ -619,8 +742,21 @@ this.history.push({
     this.saveHistory();
     this.shapes = [];
     this.faceParts = [];
+    this._lastTapPos = null; this._cycleShapes = [];
+    this.setSelectedShape(null);
+    this._hideCycleIndicator();
     this.syncToServer();
     this.render();
+  }
+
+  saveStateToLocal() {
+    try {
+      localStorage.setItem('sun_decorator_state', JSON.stringify({
+        shapes: this.shapes,
+        faceParts: this.faceParts,
+        sunSkin: this.sunSkin
+      }));
+    } catch(e) {}
   }
 
   syncToServer() {
@@ -630,6 +766,7 @@ this.history.push({
       sunSkin: this.sunSkin,
       canvasRadius: this.canvasRadius
     });
+    this.saveStateToLocal();
   }
 
   connectSocket() {
@@ -640,6 +777,8 @@ this.history.push({
     }
 
     this._socketConnecting = true;
+
+    window.addEventListener('beforeunload', () => this.saveStateToLocal());
 
     this.client.connect();
 
@@ -724,9 +863,18 @@ this.history.push({
       // Save sessionId for future reconnects
       if (data.sessionId) {
         this.sessionId = data.sessionId;
-        sessionStorage.setItem('sun_decorator_sessionId', data.sessionId);
+        localStorage.setItem('sun_decorator_sessionId', data.sessionId);
         this.client.setSessionId(this.sessionId);
         console.log('SessionId saved:', this.sessionId);
+      }
+
+      // Show fruit name inside mode capsule
+      if (data.fruitName) {
+        this.fruitName = data.fruitName;
+        const el = document.getElementById('student-fruit-name');
+        const sep = document.querySelector('.capsule-sep');
+        if (el) { el.textContent = data.fruitName; el.hidden = false; }
+        if (sep) sep.hidden = false;
       }
 
       // If this is a reconnection, clear local state and use server state
@@ -741,6 +889,23 @@ this.history.push({
         this.faceParts = data.state.faceParts || [];
         this.sunSkin = data.state.sunSkin || this.sunSkin;
         this.updateSkinSelectorUI();
+      }
+
+      // If not reconnect and server returned empty state, try localStorage fallback
+      if (!data.isReconnect && this.shapes.length === 0 && this.faceParts.length === 0) {
+        try {
+          const saved = localStorage.getItem('sun_decorator_state');
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (parsed.shapes && parsed.shapes.length > 0) {
+              this.shapes = parsed.shapes;
+              this.faceParts = parsed.faceParts || [];
+              this.sunSkin = parsed.sunSkin || this.sunSkin;
+              this.syncToServer();
+              console.log('Restored state from localStorage fallback');
+            }
+          }
+        } catch(e) {}
       }
 
       this.updateModeUI();
@@ -769,6 +934,109 @@ this.history.push({
       this.faceMode.renderPanel();
     });
 
+    this.client.on('showcase_start', (data) => {
+      const isSelf = this.client.socket && this.client.socket.id === data.studentId;
+      if (isSelf) {
+        // This student is being showcased — show notice, don't block canvas
+        const notice = document.getElementById('showcase-self-notice');
+        if (notice) notice.hidden = false;
+        return;
+      }
+      const overlay = document.getElementById('showcase-overlay');
+      const nameEl = document.getElementById('showcase-fruit-name');
+      const canvas = document.getElementById('showcase-canvas');
+      if (!overlay || !canvas) return;
+      if (nameEl) nameEl.textContent = data.fruitName || '';
+      overlay.hidden = false;
+      this._renderShowcaseState(canvas, data.state);
+    });
+
+    this.client.on('showcase_update', (data) => {
+      const canvas = document.getElementById('showcase-canvas');
+      if (!canvas || document.getElementById('showcase-overlay')?.hidden) return;
+      this._renderShowcaseState(canvas, data.state);
+    });
+
+    this.client.on('showcase_end', () => {
+      const overlay = document.getElementById('showcase-overlay');
+      if (overlay) overlay.hidden = true;
+      const notice = document.getElementById('showcase-self-notice');
+      if (notice) notice.hidden = true;
+    });
+
+    this.client.on('gallery_start', (data) => {
+      const overlay = document.getElementById('gallery-overlay');
+      const canvas = document.getElementById('gallery-canvas');
+      if (!overlay || !canvas) return;
+      overlay.hidden = false;
+      if (this._galleryAnimation) this._galleryAnimation.stop();
+      this._galleryAnimation = new GalleryAnimation(canvas, data.artworks);
+      this._galleryAnimation.start();
+    });
+
+    this.client.on('gallery_end', () => {
+      if (this._galleryAnimation) {
+        this._galleryAnimation.stop();
+        this._galleryAnimation = null;
+      }
+      const overlay = document.getElementById('gallery-overlay');
+      if (overlay) overlay.hidden = true;
+    });
+
+    this.client.on('force_reset', () => {
+      // Clear all local state
+      this.shapes = [];
+      this.faceParts = [];
+      this.history = [];
+      this.setSelectedShape(null);
+      this._hideCycleIndicator();
+      // Clear saved session so server assigns a fresh one
+      localStorage.removeItem('sun_decorator_sessionId');
+      localStorage.removeItem('sun_decorator_state');
+      this.sessionId = null;
+      this.client.sessionId = null;
+      this.client._registered = false;
+      // Hide any overlays
+      const galleryOverlay = document.getElementById('gallery-overlay');
+      if (galleryOverlay) galleryOverlay.hidden = true;
+      if (this._galleryAnimation) { this._galleryAnimation.stop(); this._galleryAnimation = null; }
+      const showcaseOverlay = document.getElementById('showcase-overlay');
+      if (showcaseOverlay) showcaseOverlay.hidden = true;
+      const notice = document.getElementById('showcase-self-notice');
+      if (notice) notice.hidden = true;
+      // Re-register as new student
+      this.client.socket.emit('register_student', { sunSkin: this.sunSkin, sessionId: null });
+      this.render();
+    });
+
+  }
+
+  _renderShowcaseState(canvas, state) {
+    const size = Math.min(window.innerWidth, window.innerHeight) * 0.85;
+    canvas.width = size * 2;
+    canvas.height = size * 2;
+    canvas.style.width = size + 'px';
+    canvas.style.height = size + 'px';
+    const ctx = canvas.getContext('2d');
+    const cx = size, cy = size, r = size;
+    const skinId = state.sunSkin || 'clay';
+    const srcR = state.canvasRadius || 400;
+    const scale = r / srcR;
+    ctx.save();
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    drawSun(ctx, cx, cy, r, skinId, 1, 'symmetric');
+    (state.shapes || []).forEach(shape => {
+      const dx = shape.x - srcR, dy = shape.y - srcR;
+      const scaled = { ...shape, x: cx + dx * scale, y: cy + dy * scale, size: shape.size * scale };
+      drawShape(ctx, scaled, scaled.size);
+    });
+    const sunR = getSunRadius(r, 'personify');
+    (state.faceParts || []).forEach(part => {
+      const sp = { ...part, offsetX: part.offsetX * scale, offsetY: part.offsetY * scale };
+      drawFacePart(ctx, sp, cx, cy, sunR);
+    });
+    ctx.restore();
   }
 
   updateModeUI() {

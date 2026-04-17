@@ -22,9 +22,11 @@
   </button>
 
   <div id="app">
-    <!-- Header -->
-    <div id="header" role="banner">
-      <span id="mode-label" aria-live="polite" aria-atomic="true">对称装饰模式</span>
+    <!-- ① 浮动模式胶囊（替代 #header） -->
+    <div id="mode-capsule" role="status" aria-live="polite" aria-atomic="true">
+      <span id="student-fruit-name" class="capsule-fruit" hidden></span>
+      <span class="capsule-sep" hidden>·</span>
+      <span id="mode-label">装饰模式</span>
     </div>
 
     <!-- Shape panel (left side) - symmetric/free modes -->
@@ -35,6 +37,11 @@
         <button class="category-tab" data-category="lines" role="tab" aria-selected="false" tabindex="-1">线</button>
       </div>
       <div id="shape-items" class="panel-grid" role="tabpanel" aria-label="素材列表"></div>
+      <!-- 皮肤栏内嵌于素材面板底部 -->
+      <div id="skin-bar-inline">
+        <div class="skin-bar-label">太阳皮肤</div>
+        <div id="skin-selector"></div>
+      </div>
     </div>
 
     <!-- Face panel (left side) - personify mode -->
@@ -53,22 +60,30 @@
       <div id="breathing-wrapper">
         <canvas id="main-canvas" role="img" aria-label="绘画画布"></canvas>
       </div>
+      <!-- 重叠选择指示器 -->
+      <div id="overlap-indicator" aria-live="polite" hidden>
+        <span id="overlap-counter">1/3</span>
+      </div>
     </div>
 
-    <!-- Sun skin selector (bottom) -->
-    <div id="skin-bar" role="toolbar" aria-label="太阳皮肤选择">
-      <div class="skin-bar-label" id="skin-bar-title">太阳皮肤</div>
-      <div id="skin-selector" role="listbox" aria-labelledby="skin-bar-title"></div>
-    </div>
-
-    <!-- Bottom toolbar -->
-    <div id="toolbar" role="toolbar" aria-label="操作工具">
-      <button id="btn-undo" class="tool-btn" aria-label="撤销">
+    <!-- ② 画布浮动操作栏（替代 #toolbar） -->
+    <div id="canvas-toolbar" role="toolbar" aria-label="画布操作">
+      <button id="btn-undo" class="canvas-tool-btn" aria-label="撤销">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10h13a4 4 0 0 1 0 8H7"/><path d="M3 10l4-4"/><path d="M3 10l4 4"/></svg>
         <span>撤销</span>
       </button>
-      <button id="btn-clear" class="tool-btn" aria-label="清空画布">
+      <div class="canvas-toolbar-divider"></div>
+      <button id="btn-copy" class="canvas-tool-btn selection-only" aria-label="复制" disabled>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        <span>复制</span>
+      </button>
+      <button id="btn-delete" class="canvas-tool-btn selection-only danger" aria-label="删除" disabled>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M5 6v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6"/></svg>
+        <span>删除</span>
+      </button>
+      <div class="canvas-toolbar-divider"></div>
+      <button id="btn-clear" class="canvas-tool-btn" aria-label="清空">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
         <span>清空</span>
       </button>
     </div>
@@ -81,12 +96,32 @@
       <p id="lock-message">老师暂停了操作</p>
     </div>
 
+    <!-- Showcase self-notice banner -->
+    <div id="showcase-self-notice" hidden role="status" aria-live="polite">
+      <span class="showcase-notice-icon">🎨</span>
+      <span>正在展示你的作品，请继续操作</span>
+    </div>
+
     <!-- Reconnect overlay -->
     <div id="reconnect-overlay" role="alertdialog" aria-modal="true" aria-labelledby="reconnect-message" hidden>
       <div class="reconnect-content">
         <div class="reconnect-spinner"></div>
         <p id="reconnect-message">断线重连中...</p>
       </div>
+    </div>
+
+    <!-- Showcase overlay -->
+    <div id="showcase-overlay" hidden>
+      <div class="showcase-header">
+        <span id="showcase-fruit-name"></span>
+        <span class="showcase-badge">正在展示</span>
+      </div>
+      <canvas id="showcase-canvas"></canvas>
+    </div>
+
+    <!-- Gallery overlay -->
+    <div id="gallery-overlay" hidden>
+      <canvas id="gallery-canvas"></canvas>
     </div>
 
   </div>
@@ -97,6 +132,7 @@
   <script src="js/canvas-utils.js"></script>
   <script src="js/face-mode.js"></script>
   <script src="js/socket-client.js"></script>
+  <script src="js/gallery-animation.js"></script>
   <script src="js/student.js"></script>
 </body>
 </html>

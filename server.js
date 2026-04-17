@@ -150,9 +150,35 @@ app.delete('/api/faces/:id', (req, res) => {
 
 let globalMode = 'symmetric';
 let locked = false;
+let showcaseState = null; // { studentId, freezeStudent }
+let showcaseThrottleTimer = null;
+let galleryState = null;
 
 const students = new Map(); // socket.id -> { sessionId, shapes, faceParts, sunSkin, name, canvasRadius, _dirty, disconnected, disconnectedAt }
 const teachers = new Set();
+
+const FRUIT_NAMES = [
+  '苹果','香蕉','橙子','葡萄','西瓜','草莓','芒果','菠萝','樱桃','桃子',
+  '梨子','蓝莓','柠檬','椰子','荔枝','龙眼','火龙果','百香果','杨梅','枇杷',
+  '柚子','橘子','金桔','木瓜','榴莲','山竹','番石榴','莲雾','杨桃','无花果',
+  '红毛丹','人参果','奇异果','蔓越莓','覆盆子','黑莓','桑椹','枸杞','柿子','山楂',
+  '哈密瓜','杏子','李子','石榴','牛油果','酸枣','马蹄','枣子','菠萝蜜','雪梨'
+];
+const usedFruitNames = new Set();
+const sessionFruitMap = new Map(); // sessionId -> fruitName
+
+function assignFruitName(sessionId) {
+  if (sessionFruitMap.has(sessionId)) return sessionFruitMap.get(sessionId);
+  let name = FRUIT_NAMES.find(n => !usedFruitNames.has(n));
+  if (!name) {
+    let i = 2;
+    while (usedFruitNames.has(FRUIT_NAMES[0] + i)) i++;
+    name = FRUIT_NAMES[0] + i;
+  }
+  usedFruitNames.add(name);
+  sessionFruitMap.set(sessionId, name);
+  return name;
+}
 
 let summaryInterval = null;
 let cleanupInterval = null;
@@ -177,12 +203,34 @@ io.on('connection', (socket) => {
       console.log(`  [DEBUG] student: sockId=${sockId}, sessionId=${state.sessionId}, disconnected=${state.disconnected}`);
     });
 
-    // Check if this is a reconnection - find existing state by sessionId with disconnected=true
+    // Check for race condition: new socket arrived before old one disconnected
     if (sessionId) {
+      for (const [sockId, state] of students.entries()) {
+        if (state.sessionId === sessionId && !state.disconnected && sockId !== socket.id) {
+          studentState = state;
+          isReconnect = true;
+          if (state._disconnectTimer) {
+            clearTimeout(state._disconnectTimer);
+            state._disconnectTimer = null;
+          }
+          students.delete(sockId);
+          students.set(socket.id, studentState);
+          console.log(`Student REFRESH-RECONNECTED (race): socket.id=${socket.id}, sessionId=${sessionId}`);
+          break;
+        }
+      }
+    }
+
+    // Check if this is a reconnection - find existing state by sessionId with disconnected=true
+    if (!studentState && sessionId) {
       for (const [sockId, state] of students.entries()) {
         if (state.sessionId === sessionId && state.disconnected) {
           studentState = state;
           isReconnect = true;
+          if (state._disconnectTimer) {
+            clearTimeout(state._disconnectTimer);
+            state._disconnectTimer = null;
+          }
           students.delete(sockId);
           students.set(socket.id, studentState);
           console.log(`Student RECONNECTED: socket.id=${socket.id}, sessionId=${sessionId}`);
@@ -193,8 +241,9 @@ io.on('connection', (socket) => {
 
     // If no reconnected state found, create new state
     if (!studentState) {
+      const newSessionId = sessionId || ('sess_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9));
       studentState = {
-        sessionId: sessionId || ('sess_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)),
+        sessionId: newSessionId,
         shapes: [],
         faceParts: [],
         sunSkin: (data && data.sunSkin) || 'clay',
@@ -204,12 +253,14 @@ io.on('connection', (socket) => {
         disconnected: false,
         disconnectedAt: null
       };
+      studentState.fruitName = assignFruitName(studentState.sessionId);
       students.set(socket.id, studentState);
-      console.log(`Student registered: ${socket.id} (sessionId: ${studentState.sessionId}, total: ${students.size})`);
+      console.log(`Student registered: ${socket.id} (sessionId: ${studentState.sessionId}, fruitName: ${studentState.fruitName}, total: ${students.size})`);
     } else {
-      // Restore disconnected flag
+      // Restore disconnected flag and ensure fruitName is set
       studentState.disconnected = false;
       studentState.disconnectedAt = null;
+      studentState.fruitName = assignFruitName(studentState.sessionId);
     }
 
     socket.emit('init_state', {
@@ -222,9 +273,10 @@ io.on('connection', (socket) => {
         canvasRadius: studentState.canvasRadius
       },
       sessionId: studentState.sessionId,
-      isReconnect: isReconnect
+      isReconnect: isReconnect,
+      fruitName: studentState.fruitName
     });
-    console.log(`Sent init_state to ${socket.id}: isReconnect=${isReconnect}, shapes=${studentState.shapes.length}`);
+    console.log(`Sent init_state to ${socket.id}: isReconnect=${isReconnect}, shapes=${studentState.shapes.length}, fruitName=${studentState.fruitName}`);
 
     broadcastToTeachers('student_joined', {
       id: socket.id,
@@ -232,7 +284,8 @@ io.on('connection', (socket) => {
       name: studentState.name,
       sunSkin: studentState.sunSkin,
       disconnected: false,
-      isReconnect: isReconnect
+      isReconnect: isReconnect,
+      fruitName: studentState.fruitName
     });
     broadcastStudentCount();
   });
@@ -247,6 +300,23 @@ io.on('connection', (socket) => {
     if (data.canvasRadius !== undefined) student.canvasRadius = data.canvasRadius;
 
     student._dirty = true;
+
+    // Broadcast live showcase update
+    if (showcaseState && showcaseState.studentId === socket.id && !showcaseState.freezeStudent) {
+      if (!showcaseThrottleTimer) {
+        showcaseThrottleTimer = setTimeout(() => {
+          showcaseThrottleTimer = null;
+          if (showcaseState && showcaseState.studentId === socket.id) {
+            const s = students.get(socket.id);
+            if (s) {
+              io.emit('showcase_update', {
+                state: { shapes: s.shapes, faceParts: s.faceParts, sunSkin: s.sunSkin, canvasRadius: s.canvasRadius }
+              });
+            }
+          }
+        }, 200);
+      }
+    }
   });
 
   socket.on('change_skin', (data) => {
@@ -269,7 +339,8 @@ io.on('connection', (socket) => {
         sessionId: state.sessionId,
         name: state.name,
         sunSkin: state.sunSkin,
-        disconnected: !!state.disconnected
+        disconnected: !!state.disconnected,
+        fruitName: state.fruitName || null
       });
     });
 
@@ -314,6 +385,92 @@ io.on('connection', (socket) => {
     socket.emit('student_list', list);
   });
 
+  socket.on('start_showcase', (data) => {
+    if (!teachers.has(socket.id)) return;
+    if (galleryState) {
+      galleryState = null;
+      io.emit('gallery_end');
+    }
+    const { studentId, freezeStudent } = data;
+    const student = students.get(studentId);
+    if (!student) return;
+    showcaseState = { studentId, freezeStudent };
+    io.emit('showcase_start', {
+      studentId,
+      fruitName: student.fruitName || student.name,
+      state: {
+        shapes: student.shapes,
+        faceParts: student.faceParts,
+        sunSkin: student.sunSkin,
+        canvasRadius: student.canvasRadius
+      },
+      freezeStudent
+    });
+    broadcastToTeachers('showcase_status', { active: true, studentId, freezeStudent });
+  });
+
+  socket.on('stop_showcase', () => {
+    if (!teachers.has(socket.id)) return;
+    showcaseState = null;
+    io.emit('showcase_end');
+    broadcastToTeachers('showcase_status', { active: false });
+  });
+
+  socket.on('clear_all_students', () => {
+    if (!teachers.has(socket.id)) return;
+    // Stop any active showcase/gallery
+    if (showcaseState) { showcaseState = null; io.emit('showcase_end'); broadcastToTeachers('showcase_status', { active: false }); }
+    if (galleryState)  { galleryState  = null; io.emit('gallery_end');  broadcastToTeachers('gallery_status',  { active: false }); }
+    // Notify all students to reset
+    io.emit('force_reset');
+    // Clear server-side student state
+    students.forEach((state) => {
+      if (state._disconnectTimer) clearTimeout(state._disconnectTimer);
+    });
+    students.clear();
+    usedFruitNames.clear();
+    sessionFruitMap.clear();
+    broadcastToTeachers('all_students_cleared');
+    broadcastStudentCount();
+    console.log('All students cleared by teacher');
+  });
+
+  socket.on('start_gallery', (data) => {
+    if (!teachers.has(socket.id)) return;
+    if (showcaseState) {
+      showcaseState = null;
+      io.emit('showcase_end');
+      broadcastToTeachers('showcase_status', { active: false });
+    }
+    const { studentIds } = data;
+    const artworks = [];
+    (studentIds || []).forEach(sid => {
+      const student = students.get(sid);
+      if (student) {
+        artworks.push({
+          studentId: sid,
+          fruitName: student.fruitName || student.name,
+          state: {
+            shapes: student.shapes,
+            faceParts: student.faceParts,
+            sunSkin: student.sunSkin,
+            canvasRadius: student.canvasRadius
+          }
+        });
+      }
+    });
+    galleryState = { studentIds };
+    io.emit('gallery_start', { artworks });
+    broadcastToTeachers('gallery_status', { active: true });
+  });
+
+  socket.on('stop_gallery', () => {
+    if (!teachers.has(socket.id)) return;
+    galleryState = null;
+    io.emit('gallery_end');
+    broadcastToTeachers('gallery_status', { active: false });
+  });
+
   // --- Disconnect ---
 
   socket.on('disconnect', (reason) => {
@@ -321,13 +478,13 @@ io.on('connection', (socket) => {
 
     if (students.has(socket.id)) {
       const student = students.get(socket.id);
-      const wasDisconnected = student.disconnected;
-      student.disconnected = true;
-      student.disconnectedAt = Date.now();
-      if (!wasDisconnected) {
+      student._disconnectTimer = setTimeout(() => {
+        student.disconnected = true;
+        student.disconnectedAt = Date.now();
+        student._disconnectTimer = null;
         broadcastToTeachers('student_disconnected', { id: socket.id, sessionId: student.sessionId });
-        console.log(`Student marked disconnected: ${socket.id} (sessionId: ${student.sessionId}, remaining active: ${getActiveStudentCount()})`);
-      }
+        console.log(`Student marked disconnected: ${socket.id}`);
+      }, 2000);
     }
 
     if (teachers.has(socket.id)) {
@@ -370,6 +527,14 @@ cleanupInterval = setInterval(() => {
     }
   });
   toDelete.forEach(socketId => {
+    const state = students.get(socketId);
+    if (state) {
+      const fn = state.fruitName;
+      if (fn) {
+        usedFruitNames.delete(fn);
+        sessionFruitMap.delete(state.sessionId);
+      }
+    }
     students.delete(socketId);
     console.log(`Cleaned up disconnected student: ${socketId}`);
   });

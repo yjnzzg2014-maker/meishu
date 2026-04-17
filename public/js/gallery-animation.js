@@ -34,44 +34,57 @@ class GalleryAnimation {
   }
 
   _prepareOffscreens() {
-    this._offscreens = this.artworks.map(art => {
-      const size = Math.min(this.canvas.height * 0.45, 320);
-      const oc = document.createElement('canvas');
-      // Inner artwork canvas (artwork content only, no shadow padding)
-      const pad = 24; // shadow padding so shadow isn't clipped
-      oc.width = size * 2 + pad * 2;
-      oc.height = size * 2 + pad * 2;
-      const ctx = oc.getContext('2d');
-      const cx = size + pad, cy = size + pad, r = size;
-      const srcR = art.state.canvasRadius || 400;
-      const scale = r / srcR;
-      // Bake drop shadow once into offscreen
-      ctx.shadowColor = 'rgba(0,0,0,0.5)';
-      ctx.shadowBlur = 20;
-      ctx.fillStyle = '#fffbe6';
-      ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.shadowColor = 'transparent';
-      ctx.shadowBlur = 0;
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
-      ctx.clip();
-      drawSun(ctx, cx, cy, r, art.state.sunSkin || 'clay', 1, 'symmetric');
-      (art.state.shapes || []).forEach(shape => {
-        const dx = shape.x - srcR, dy = shape.y - srcR;
-        const scaled = { ...shape, x: cx + dx * scale, y: cy + dy * scale, size: shape.size * scale };
-        drawShape(ctx, scaled, scaled.size);
-      });
-      const sunR = getSunRadius(r, 'personify');
-      (art.state.faceParts || []).forEach(part => {
-        const sp = { ...part, offsetX: part.offsetX * scale, offsetY: part.offsetY * scale };
-        drawFacePart(ctx, sp, cx, cy, sunR);
-      });
-      ctx.restore();
-      return { canvas: oc, size, pad, fruitName: art.fruitName };
-    });
+    this._offscreens = [];
+    const size = Math.min(this.canvas.width / 5 * 0.55, 100);
+    console.log('[Gallery] artworks received:', this.artworks.length, 'size:', size, 'AssetLoader.ready:', AssetLoader.ready);
+    for (const art of this.artworks) {
+      console.log('[Gallery] art.state:', art.state, 'fruitName:', art.fruitName);
+      if (!art.state) { console.warn('[Gallery] skipping art: no state'); continue; }
+      try {
+        const oc = document.createElement('canvas');
+        oc.width = size * 2;
+        oc.height = size * 2;
+        const ctx = oc.getContext('2d');
+        if (!ctx) continue;
+        const cx = size, cy = size, r = size;
+        const srcR = art.state.canvasRadius || 400;
+        const scale = r / srcR;
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.clip();
+        const sunImg = AssetLoader.get('sun_' + (art.state.sunSkin || 'clay'));
+        console.log('[Gallery] sunImg for', art.state.sunSkin, ':', sunImg);
+        if (!sunImg) {
+          // Fallback: plain colored circle so we can see the sun is being positioned correctly
+          ctx.fillStyle = '#ffcc00';
+          ctx.fill();
+        }
+        drawSun(ctx, cx, cy, r, art.state.sunSkin || 'clay', 1, 'symmetric');
+        (art.state.shapes || []).forEach(shape => {
+          const dx = shape.x - srcR, dy = shape.y - srcR;
+          const scaled = { ...shape, x: cx + dx * scale, y: cy + dy * scale, size: shape.size * scale };
+          drawShape(ctx, scaled, scaled.size);
+        });
+        const sunR = getSunRadius(r, 'personify');
+        (art.state.faceParts || []).forEach(part => {
+          const sp = { ...part, offsetX: part.offsetX * scale, offsetY: part.offsetY * scale };
+          drawFacePart(ctx, sp, cx, cy, sunR);
+        });
+        ctx.restore();
+        this._offscreens.push({
+          canvas: oc,
+          size,
+          fruitName: art.fruitName,
+          rotationSpeed: (0.001 + Math.random() * 0.003) * (Math.random() < 0.5 ? 1 : -1),
+          rotation: Math.random() * Math.PI * 2,
+          hangY: this.canvas.height * (0.05 + Math.random() * 0.22),
+        });
+      } catch (e) {
+        console.warn('[Gallery] offscreen render failed:', e);
+      }
+    }
+    console.log('[Gallery] _offscreens prepared:', this._offscreens.length);
   }
 
   _generateStars() {
@@ -91,6 +104,7 @@ class GalleryAnimation {
     this._raf = requestAnimationFrame(() => this._loop());
     this._t++;
     this._scrollX += 0.5;
+    this._offscreens.forEach(item => { item.rotation += item.rotationSpeed; });
     this._draw();
   }
 
@@ -122,35 +136,49 @@ class GalleryAnimation {
 
     // Hanging artworks
     if (this._offscreens.length === 0) return;
-    const spacing = Math.max(280, W / Math.max(this._offscreens.length, 1));
-    const totalW = spacing * this._offscreens.length;
+    const count = this._offscreens.length;
+    const spacing = count >= 5 ? W / count : W / Math.max(count, 1);
+    const totalW = spacing * count;
     const loopX = this._scrollX % totalW;
 
-    // Batch: draw all strings first (same style), then artworks, then labels
+    // Compute positions
+    const positions = this._offscreens.map((item, i) => {
+      let x = i * spacing - loopX + spacing / 2;
+      if (x < -item.size * 2) x += totalW;
+      if (x > W + item.size * 2) x -= totalW;
+      return { ...item, x };
+    });
+
+    // Draw all strings first
     ctx.strokeStyle = 'rgba(255,230,180,0.6)';
     ctx.lineWidth = 2;
-    const artworks = this._offscreens.map((item, i) => {
-      let x = i * spacing - loopX + spacing / 2;
-      if (x < -item.size) x += totalW;
-      if (x > W + item.size) x -= totalW;
-      const artY = H * (0.1 + (i % 5) * 0.05);
+    positions.forEach(({ x, hangY }) => {
       ctx.beginPath();
       ctx.moveTo(x, 0);
-      ctx.lineTo(x, artY);
+      ctx.lineTo(x, hangY);
       ctx.stroke();
-      return { ...item, x, artY };
     });
 
-    artworks.forEach(({ canvas: oc, size, pad, x, artY }) => {
-      ctx.drawImage(oc, x - size - pad, artY - pad, size * 2 + pad * 2, size * 2 + pad * 2);
+    // Draw artworks with rotation around circle center
+    positions.forEach(({ canvas: oc, size, x, hangY, rotation }) => {
+      const cx = x;
+      const cy = hangY + size;
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.5)';
+      ctx.shadowBlur = 20;
+      ctx.translate(cx, cy);
+      ctx.rotate(rotation);
+      ctx.drawImage(oc, -size, -size, size * 2, size * 2);
+      ctx.restore();
     });
 
+    // Draw labels below the circle
     ctx.fillStyle = 'rgba(255,230,180,0.85)';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
-    artworks.forEach(({ size, fruitName, x, artY }) => {
-      ctx.font = `bold ${Math.round(size * 0.18)}px "PingFang SC", Arial, sans-serif`;
-      ctx.fillText(fruitName || '', x, artY + size * 2 + 8);
+    positions.forEach(({ size, fruitName, x, hangY }) => {
+      ctx.font = `bold ${Math.round(size * 0.22)}px "PingFang SC", Arial, sans-serif`;
+      ctx.fillText(fruitName || '', x, hangY + size * 2 + 10);
     });
   }
 

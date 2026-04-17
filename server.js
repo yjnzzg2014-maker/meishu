@@ -371,7 +371,12 @@ io.on('connection', (socket) => {
     if (student) {
       socket.emit('student_state', {
         id: data.studentId,
-        state: student
+        state: {
+          shapes: student.shapes,
+          faceParts: student.faceParts,
+          sunSkin: student.sunSkin,
+          canvasRadius: student.canvasRadius,
+        }
       });
     }
   });
@@ -549,7 +554,15 @@ summaryInterval = setInterval(() => {
 
   students.forEach((state, id) => {
     if (state._dirty) {
-      broadcastToTeachers('student_updated', { id, state });
+      broadcastToTeachers('student_updated', {
+        id,
+        state: {
+          shapes: state.shapes,
+          faceParts: state.faceParts,
+          sunSkin: state.sunSkin,
+          canvasRadius: state.canvasRadius,
+        }
+      });
       state._dirty = false;
     }
   });

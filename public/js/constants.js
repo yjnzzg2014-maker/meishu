@@ -102,7 +102,7 @@ const SUN_CONFIG = {
   personifyRadiusRatio: 0.32,   // Larger sun in personify mode for face operations
   breathingMin: 0.95,
   breathingMax: 1.05,
-  breathingSpeed: 0.015
+  breathingSpeed: 0
 };
 
 // Scale limits for pinch-zoom

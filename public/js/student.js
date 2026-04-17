@@ -38,6 +38,12 @@ class StudentApp {
     this._syncTimer = null;
     this._syncPending = false;
 
+    // Render scheduling state
+    this._breathAnimFrame = null;  // rAF ID for main animation loop
+    this._renderDirty = false;     // flag: render needed on next rAF tick
+    this._canvasRect = null;       // cached getBoundingClientRect()
+    this._localSaveTimer = null;   // debounce timer for localStorage writes
+
     // Session ID for reconnect handling
     this.sessionId = localStorage.getItem('sun_decorator_sessionId');
 
@@ -131,7 +137,10 @@ class StudentApp {
     // panelW：两侧剩余空间各取一半，完整填满画布两侧；下限 64px 兜底竖屏/方屏
     const panelW = Math.max(64, Math.floor((availW - size) / 2));
 
-    const canvasSize = size * 2;
+    // Use actual device pixel ratio (capped at 2) instead of hardcoded ×2.
+    // On low-end tablets (DPR=1 or 1.5) this reduces canvas pixels by 44–75%.
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const canvasSize = Math.round(size * dpr);
     this.canvas.width = canvasSize;
     this.canvas.height = canvasSize;
     this.canvas.style.width = size + 'px';
@@ -145,6 +154,9 @@ class StudentApp {
       const el = document.getElementById(id);
       if (el) el.style.width = panelW + 'px';
     });
+
+    // Invalidate cached rect after layout changes
+    requestAnimationFrame(() => { this._canvasRect = this.canvas.getBoundingClientRect(); });
   }
 
   renderShapePanel() {
@@ -447,6 +459,11 @@ class StudentApp {
     let shapeInitScale = 1;
     let shapeInitRotationOffset = 0;
     let isPinching = false;
+    // Tracks whether the active drag was interrupted by a system pointercancel
+    // (Huawei side-panel / palm rejection) so we can re-adopt the pointer seamlessly.
+    let dragCancelled = false;
+    let dragCancelledAt = 0;
+    const CANCEL_RECOVERY_MS = 500;
 
     // Prevent native text selection and context menu on long press
     this.canvas.addEventListener('selectstart', (e) => e.preventDefault());
@@ -456,9 +473,29 @@ class StudentApp {
       e.preventDefault();
       if (this.locked) return;
       if (primaryPointerId !== null) return;
-      primaryPointerId = e.pointerId;
 
       const { x, y } = this.canvasCoords(e);
+
+      // Re-adopt pointer after a system-cancelled drag (Huawei gesture interference).
+      // Skip cycling logic and recalculate offsets to avoid a jump.
+      if (dragCancelled && (Date.now() - dragCancelledAt) < CANCEL_RECOVERY_MS &&
+          (this.selectedShape || this.selectedFacePart)) {
+        dragCancelled = false;
+        primaryPointerId = e.pointerId;
+        if (this.selectedShape) {
+          this.dragOffset.x = x - this.selectedShape.x;
+          this.dragOffset.y = y - this.selectedShape.y;
+          this.canvas.setPointerCapture(e.pointerId);
+        } else if (this.selectedFacePart) {
+          this.dragOffset.x = x - (this.centerX + this.selectedFacePart.offsetX);
+          this.dragOffset.y = y - (this.centerY + this.selectedFacePart.offsetY);
+          this.canvas.setPointerCapture(e.pointerId);
+        }
+        return;
+      }
+
+      dragCancelled = false;
+      primaryPointerId = e.pointerId;
 
       if (this.mode === 'personify' || this.mode === 'free') {
         this.selectedFacePart = this.faceMode.findPartAt(x, y);
@@ -487,6 +524,23 @@ class StudentApp {
     });
 
     this.canvas.addEventListener('pointermove', (e) => {
+      // Re-adopt pointer seamlessly if a system cancel interrupted an active drag.
+      if (primaryPointerId === null && dragCancelled &&
+          (Date.now() - dragCancelledAt) < CANCEL_RECOVERY_MS &&
+          (this.selectedShape || this.selectedFacePart)) {
+        dragCancelled = false;
+        isPinching = false;
+        primaryPointerId = e.pointerId;
+        const { x, y } = this.canvasCoords(e);
+        if (this.selectedShape) {
+          this.dragOffset.x = x - this.selectedShape.x;
+          this.dragOffset.y = y - this.selectedShape.y;
+        } else if (this.selectedFacePart) {
+          this.dragOffset.x = x - (this.centerX + this.selectedFacePart.offsetX);
+          this.dragOffset.y = y - (this.centerY + this.selectedFacePart.offsetY);
+        }
+      }
+
       if (e.pointerId !== primaryPointerId) return;
       if (isPinching) return;
 
@@ -497,7 +551,7 @@ class StudentApp {
         this.selectedFacePart.offsetY = y - this.dragOffset.y - this.centerY;
         this.faceMode.constrainToSun(this.selectedFacePart);
         this.throttledSync();
-        this.render();
+        this._scheduleRender();
         return;
       }
 
@@ -513,13 +567,14 @@ class StudentApp {
         this.selectedShape.angle = toCenterAngle;
 
         this.throttledSync();
-        this.render();
+        this._scheduleRender();
       }
     });
 
     this.canvas.addEventListener('pointerup', (e) => {
       if (e.pointerId !== primaryPointerId) return;
       primaryPointerId = null;
+      dragCancelled = false;
       this._flushSync();
 
       if (this.selectedShape) {
@@ -576,7 +631,7 @@ class StudentApp {
           }
 
           this.throttledSync();
-          this.render();
+          this._scheduleRender();
         }
       }
     }, { passive: true });
@@ -598,10 +653,14 @@ class StudentApp {
       }
     }, { passive: true });
 
-    // pointercancel: 指针被系统中断时重置主指针状态，防止所有后续 pointer 事件被阻塞
+    // pointercancel: 系统中断（华为侧边栏、手掌误触等）时标记为可恢复状态，
+    // 而非直接丢弃拖拽。500ms 内手指仍在移动可无缝续接。
     this.canvas.addEventListener('pointercancel', (e) => {
       if (e.pointerId === primaryPointerId) {
         primaryPointerId = null;
+        isPinching = false;  // 防止 isPinching 卡死
+        dragCancelled = !!(this.selectedShape || this.selectedFacePart);
+        dragCancelledAt = Date.now();
         this._flushSync();
         try { this.canvas.releasePointerCapture(e.pointerId); } catch (_) {}
       }
@@ -609,12 +668,12 @@ class StudentApp {
   }
 
   canvasCoords(e) {
-    const rect = this.canvas.getBoundingClientRect();
+    const rect = this._canvasRect || (this._canvasRect = this.canvas.getBoundingClientRect());
     const scaleX = this.canvas.width / rect.width;
     const scaleY = this.canvas.height / rect.height;
     return {
       x: (e.clientX - rect.left) * scaleX,
-      y: (e.clientY - rect.top) * scaleY
+      y: (e.clientY - rect.top) * scaleY,
     };
   }
 
@@ -624,7 +683,7 @@ class StudentApp {
       const shape = this.shapes[i];
       const hitSize = (shape.size * (shape.scale || 1)) / 2 + 15;
       const dx = x - shape.x, dy = y - shape.y;
-      if (Math.sqrt(dx * dx + dy * dy) < hitSize) hits.push(shape);
+      if (dx * dx + dy * dy < hitSize * hitSize) hits.push(shape);
     }
     return hits;
   }
@@ -750,13 +809,20 @@ this.history.push({
   }
 
   saveStateToLocal() {
-    try {
-      localStorage.setItem('sun_decorator_state', JSON.stringify({
-        shapes: this.shapes,
-        faceParts: this.faceParts,
-        sunSkin: this.sunSkin
-      }));
-    } catch(e) {}
+    // Debounce localStorage writes: Android WebView flushes to disk synchronously
+    // on every setItem call, blocking the main thread for 50-200ms.
+    // Batch writes so at most one flush happens per 800ms of inactivity.
+    if (this._localSaveTimer) clearTimeout(this._localSaveTimer);
+    this._localSaveTimer = setTimeout(() => {
+      this._localSaveTimer = null;
+      try {
+        localStorage.setItem('sun_decorator_state', JSON.stringify({
+          shapes: this.shapes,
+          faceParts: this.faceParts,
+          sunSkin: this.sunSkin,
+        }));
+      } catch(e) {}
+    }, 800);
   }
 
   syncToServer() {
@@ -778,7 +844,15 @@ this.history.push({
 
     this._socketConnecting = true;
 
-    window.addEventListener('beforeunload', () => this.saveStateToLocal());
+    window.addEventListener('beforeunload', () => {
+      // Flush immediately on page close — bypass the debounce timer
+      if (this._localSaveTimer) { clearTimeout(this._localSaveTimer); this._localSaveTimer = null; }
+      try {
+        localStorage.setItem('sun_decorator_state', JSON.stringify({
+          shapes: this.shapes, faceParts: this.faceParts, sunSkin: this.sunSkin,
+        }));
+      } catch(e) {}
+    });
 
     this.client.connect();
 
@@ -1088,19 +1162,28 @@ this.history.push({
   }
 
   startAnimation() {
-    // Subtle sun-only breathing animation
-    if (!prefersReducedMotion && SUN_CONFIG.breathingSpeed > 0) {
-      let breathPhase = 0;
-      const animate = () => {
+    // Always run a persistent rAF loop so the browser treats this page as a
+    // continuous animation and maintains full frame priority (prevents Android's
+    // sporadic-rAF throttling that kicks in after ~10 one-shot rAF calls).
+    // Renders are gated by _renderDirty to avoid unnecessary GPU work when idle.
+    this._renderDirty = true;
+    let breathPhase = 0;
+    const tick = () => {
+      this._breathAnimFrame = requestAnimationFrame(tick);
+      if (!prefersReducedMotion && SUN_CONFIG.breathingSpeed > 0) {
         breathPhase += SUN_CONFIG.breathingSpeed;
-        const breathScale = 1 + Math.sin(breathPhase) * 0.02; // Subtle 2% variation
-        this.render(breathScale);
-        this._breathAnimFrame = requestAnimationFrame(animate);
-      };
-      animate();
-    } else {
-      this.render();
-    }
+        this.render(1 + Math.sin(breathPhase) * 0.02);
+      } else if (this._renderDirty) {
+        this._renderDirty = false;
+        this.render();
+      }
+    };
+    tick();
+  }
+
+  // Signal that the canvas needs to be redrawn on the next rAF tick.
+  _scheduleRender() {
+    this._renderDirty = true;
   }
 
   render(breathScale = 1) {

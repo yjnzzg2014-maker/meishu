@@ -7,14 +7,25 @@ class GalleryAnimation {
     this._stars = [];
     this._scrollX = 0;
     this._t = 0;
+    this._ctx = null;         // cached 2d context
+    this._bgGrad = null;      // cached background gradient
   }
 
   start() {
     this.canvas.width = window.innerWidth;
     this.canvas.height = window.innerHeight;
+    this._ctx = this.canvas.getContext('2d');
+    this._bgGrad = this._buildBgGrad();
     this._prepareOffscreens();
     this._generateStars();
     this._loop();
+  }
+
+  _buildBgGrad() {
+    const grad = this._ctx.createLinearGradient(0, 0, 0, this.canvas.height);
+    grad.addColorStop(0, '#0a0a2e');
+    grad.addColorStop(1, '#000');
+    return grad;
   }
 
   stop() {
@@ -26,16 +37,23 @@ class GalleryAnimation {
     this._offscreens = this.artworks.map(art => {
       const size = Math.min(this.canvas.height * 0.45, 320);
       const oc = document.createElement('canvas');
-      oc.width = size * 2;
-      oc.height = size * 2;
+      // Inner artwork canvas (artwork content only, no shadow padding)
+      const pad = 24; // shadow padding so shadow isn't clipped
+      oc.width = size * 2 + pad * 2;
+      oc.height = size * 2 + pad * 2;
       const ctx = oc.getContext('2d');
-      const cx = size, cy = size, r = size;
+      const cx = size + pad, cy = size + pad, r = size;
       const srcR = art.state.canvasRadius || 400;
       const scale = r / srcR;
+      // Bake drop shadow once into offscreen
+      ctx.shadowColor = 'rgba(0,0,0,0.5)';
+      ctx.shadowBlur = 20;
       ctx.fillStyle = '#fffbe6';
       ctx.beginPath();
       ctx.arc(cx, cy, r, 0, Math.PI * 2);
       ctx.fill();
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
       ctx.save();
       ctx.beginPath();
       ctx.arc(cx, cy, r, 0, Math.PI * 2);
@@ -52,7 +70,7 @@ class GalleryAnimation {
         drawFacePart(ctx, sp, cx, cy, sunR);
       });
       ctx.restore();
-      return { canvas: oc, size, fruitName: art.fruitName };
+      return { canvas: oc, size, pad, fruitName: art.fruitName };
     });
   }
 
@@ -77,27 +95,23 @@ class GalleryAnimation {
   }
 
   _draw() {
-    const ctx = this.canvas.getContext('2d');
+    const ctx = this._ctx;
     const W = this.canvas.width, H = this.canvas.height;
 
-    // Background
-    const grad = ctx.createLinearGradient(0, 0, 0, H);
-    grad.addColorStop(0, '#0a0a2e');
-    grad.addColorStop(1, '#000');
-    ctx.fillStyle = grad;
+    // Background (use cached gradient)
+    ctx.fillStyle = this._bgGrad;
     ctx.fillRect(0, 0, W, H);
 
-    // Stars
+    // Stars — batched by opacity group to minimise save/restore overhead
+    const yScale = H / (H * 0.7);
+    ctx.fillStyle = '#fff';
     this._stars.forEach(s => {
-      const opacity = 0.4 + 0.5 * Math.sin(s.phase + this._t * s.speed);
-      ctx.save();
-      ctx.globalAlpha = opacity;
-      ctx.fillStyle = '#fff';
+      ctx.globalAlpha = 0.4 + 0.5 * Math.sin(s.phase + this._t * s.speed);
       ctx.beginPath();
-      ctx.arc(s.x, s.y * (H / (H * 0.7)), s.r, 0, Math.PI * 2);
+      ctx.arc(s.x, s.y * yScale, s.r, 0, Math.PI * 2);
       ctx.fill();
-      ctx.restore();
     });
+    ctx.globalAlpha = 1;
 
     // Far hills (dark, slow)
     this._drawHills(ctx, W, H, this._scrollX * 0.3, H * 0.82, '#0d1a2e', 0.18, 8);
@@ -112,42 +126,32 @@ class GalleryAnimation {
     const totalW = spacing * this._offscreens.length;
     const loopX = this._scrollX % totalW;
 
-    for (let i = 0; i < this._offscreens.length; i++) {
-      const { canvas: oc, size, fruitName } = this._offscreens[i];
+    // Batch: draw all strings first (same style), then artworks, then labels
+    ctx.strokeStyle = 'rgba(255,230,180,0.6)';
+    ctx.lineWidth = 2;
+    const artworks = this._offscreens.map((item, i) => {
       let x = i * spacing - loopX + spacing / 2;
-      // Loop back
-      if (x < -size) x += totalW;
-      if (x > W + size) x -= totalW;
-
-      const stringLen = H * (0.1 + (i % 5) * 0.05);
-      const artY = stringLen;
-
-      // String
-      ctx.save();
-      ctx.strokeStyle = 'rgba(255,230,180,0.6)';
-      ctx.lineWidth = 2;
+      if (x < -item.size) x += totalW;
+      if (x > W + item.size) x -= totalW;
+      const artY = H * (0.1 + (i % 5) * 0.05);
       ctx.beginPath();
       ctx.moveTo(x, 0);
       ctx.lineTo(x, artY);
       ctx.stroke();
-      ctx.restore();
+      return { ...item, x, artY };
+    });
 
-      // Artwork circle (shadow)
-      ctx.save();
-      ctx.shadowColor = 'rgba(0,0,0,0.5)';
-      ctx.shadowBlur = 20;
-      ctx.drawImage(oc, x - size, artY, size * 2, size * 2);
-      ctx.restore();
+    artworks.forEach(({ canvas: oc, size, pad, x, artY }) => {
+      ctx.drawImage(oc, x - size - pad, artY - pad, size * 2 + pad * 2, size * 2 + pad * 2);
+    });
 
-      // Fruit name label
-      ctx.save();
-      ctx.fillStyle = 'rgba(255,230,180,0.85)';
+    ctx.fillStyle = 'rgba(255,230,180,0.85)';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    artworks.forEach(({ size, fruitName, x, artY }) => {
       ctx.font = `bold ${Math.round(size * 0.18)}px "PingFang SC", Arial, sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'top';
       ctx.fillText(fruitName || '', x, artY + size * 2 + 8);
-      ctx.restore();
-    }
+    });
   }
 
   _drawHills(ctx, W, H, scrollX, baseY, color, heightRatio, count) {

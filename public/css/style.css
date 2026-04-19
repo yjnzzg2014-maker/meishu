@@ -41,6 +41,20 @@ body {
   background: linear-gradient(160deg, var(--color-bg-primary) 0%, var(--color-bg-secondary) 40%, #FFF5E6 100%);
 }
 
+/* ===== Prevent Long-Press Copy/Select ===== */
+* {
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+input,
+textarea {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
 /* ===== Dark Mode ===== */
 @media (prefers-color-scheme: dark) {
   :root {

@@ -781,6 +781,7 @@ class TeacherApp {
     const h = entry.canvas.height;
     const cx = w / 2, cy = h / 2, r = w / 2 - 5;
 
+    ctx.clearRect(0, 0, w, h);
     ctx.save();
     ctx.beginPath();
     ctx.rect(0, 0, w, h);
@@ -840,6 +841,7 @@ class TeacherApp {
     const h = canvas.height;
     const cx = w / 2, cy = h / 2, r = w / 2 - 5;
 
+    ctx.clearRect(0, 0, w, h);
     ctx.save();
     ctx.beginPath();
     ctx.rect(0, 0, w, h);

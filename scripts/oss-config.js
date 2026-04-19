@@ -1,12 +1,11 @@
 /**
  * 阿里云 OSS 配置
  *
- * 使用前请设置环境变量:
- * - OSS_ACCESS_KEY_ID
- * - OSS_ACCESS_KEY_SECRET
- *
- * 或直接填写下方配置 (不推荐提交到 Git)
+ * 凭证存储在 .env.local (已加入 .gitignore)
+ * 运行前会自动加载
  */
+
+require('dotenv').config({ path: require('path').resolve(__dirname, '..', '.env.local') });
 
 module.exports = {
   // 区域，例如 oss-cn-hangzhou, oss-cn-shanghai

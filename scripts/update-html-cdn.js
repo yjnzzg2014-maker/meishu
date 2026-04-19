@@ -4,7 +4,7 @@
  * 用法:
  *   node scripts/update-html-cdn.js
  *
- * 生成的 CDN 版本会放在 public/dist/ 目录
+ * 生成的 CDN 版本会放在 public/dist/ 目录，同时更新 public/ 原文件
  */
 
 const path = require('path');
@@ -14,37 +14,79 @@ const config = require('./oss-config');
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const OUTPUT_DIR = path.join(__dirname, '..', 'public', 'dist');
 
+// bundle 文件名映射
+const BUNDLE_MAP = {
+  'student.html': 'bundle-student.js',
+  'teacher.html': 'bundle-teacher.js',
+};
+
+// student/teacher 各自加载的多个 JS 文件，用 bundle 替换掉
+const STUDENT_JS = ['constants.js', 'asset-loader.js', 'canvas-utils.js', 'face-mode.js', 'socket-client.js', 'gallery-animation.js', 'student.js'];
+const TEACHER_JS = ['constants.js', 'asset-loader.js', 'canvas-utils.js', 'draw-tool.js', 'socket-client.js', 'teacher.js'];
+const JS_TO_BUNDLE = {
+  'student.html': STUDENT_JS,
+  'teacher.html': TEACHER_JS,
+};
+
 function getCdnUrl(localPath) {
-  // localPath: public/images/xxx.webp -> meishu/images/xxx.webp
   const key = config.prefix + localPath.replace('public/', '');
   return config.getPublicUrl(key);
 }
 
-function processHtml(content, filePath) {
-  // 替换图片引用
-  content = content.replace(/src=["'](\.\/)?images\/([^"']+)["']/gi, (match, p1, filename) => {
-    const localPath = `public/images/${filename}`;
-    return `src="${getCdnUrl(localPath)}"`;
-  });
-
-  // 替换 JS 引用
-  content = content.replace(/src=["'](\.\/)?js\/([^"']+)["']/gi, (match, p1, filename) => {
-    const localPath = `public/js/${filename}`;
-    return `src="${getCdnUrl(localPath)}"`;
-  });
-
-  // 替换 CSS 引用
-  content = content.replace(/href=["'](\.\/)?css\/([^"']+)["']/gi, (match, p1, filename) => {
-    const localPath = `public/css/${filename}`;
-    return `href="${getCdnUrl(localPath)}"`;
-  });
-
-  return content;
+function getAssetBaseUrl() {
+  const base = config.cdnDomain
+    ? `https://${config.cdnDomain}/${config.prefix}`
+    : `https://${config.bucket}.${config.region}.aliyuncs.com/${config.prefix}`;
+  // ensure trailing slash
+  return base.endsWith('/') ? base : base + '/';
 }
 
-function processFile(filePath) {
-  const content = fs.readFileSync(filePath, 'utf8');
-  return processHtml(content, filePath);
+function processHtml(content, htmlFile) {
+  const bundleFile = BUNDLE_MAP[htmlFile];
+  const jsFiles = JS_TO_BUNDLE[htmlFile] || [];
+
+  // 1. 替换 CSS 引用
+  content = content.replace(/href=["'](\.\/)?css\/([^"']+)["']/gi, (match, p1, filename) => {
+    return `href="${getCdnUrl(`public/css/${filename}`)}"`;
+  });
+
+  // 2. 替换内联样式中的 url() 图片引用
+  content = content.replace(/url\(['"]?(\.\/)?images\/([^"')]+)['"]?\)/gi, (match, p1, filename) => {
+    return `url('${getCdnUrl(`public/images/${filename}`)}')`;
+  });
+
+  // 3. 替换 src="images/..." 图片引用
+  content = content.replace(/src=["'](\.\/)?images\/([^"']+)["']/gi, (match, p1, filename) => {
+    return `src="${getCdnUrl(`public/images/${filename}`)}"`;
+  });
+
+  // 4. 注入 ASSET_BASE_URL（在第一个 <script> 前），用于 asset-loader 动态加载图片
+  const assetBaseUrl = getAssetBaseUrl();
+  const assetBaseScript = `<script>window.ASSET_BASE_URL='${assetBaseUrl}';</script>\n  `;
+  content = content.replace(/(<script\b)/, assetBaseScript + '$1');
+
+  // 5. 将多个 JS <script> 标签替换为单个 bundle，减少请求数
+  if (bundleFile && jsFiles.length > 0) {
+    // 构建匹配所有目标 JS 的正则（匹配本地路径和 OSS URL）
+    const filePatterns = jsFiles.map(f => f.replace('.', '\\.'));
+    // 找到第一个匹配的 script 行位置，替换为 bundle，删除其余
+    let firstReplaced = false;
+    const bundleUrl = getCdnUrl(`public/js/${bundleFile}`);
+    for (const jsFile of jsFiles) {
+      const escapedFile = jsFile.replace('.', '\\.');
+      const re = new RegExp(`[ \\t]*<script[^>]+(?:js/${escapedFile})[^>]*><\\/script>\\n?`, 'gi');
+      if (!firstReplaced) {
+        content = content.replace(re, () => {
+          firstReplaced = true;
+          return `  <script src="${bundleUrl}"></script>\n`;
+        });
+      } else {
+        content = content.replace(re, '');
+      }
+    }
+  }
+
+  return content;
 }
 
 function main() {
@@ -52,23 +94,24 @@ function main() {
     fs.mkdirSync(OUTPUT_DIR, { recursive: true });
   }
 
-  const htmlFiles = ['student.html', 'teacher.html'];
   const cdnUrl = config.cdnDomain || `${config.bucket}.${config.region}.aliyuncs.com`;
+  console.log(`\n🌐 生成 CDN 版本 HTML (OSS: ${cdnUrl})\n`);
 
-  console.log(`\n🌐 生成 CDN 版本 HTML (CDN: ${cdnUrl})\n`);
-
-  for (const htmlFile of htmlFiles) {
+  for (const htmlFile of ['student.html', 'teacher.html']) {
     const srcPath = path.join(PUBLIC_DIR, htmlFile);
     if (!fs.existsSync(srcPath)) continue;
 
-    const outputPath = path.join(OUTPUT_DIR, htmlFile);
-    const content = processFile(srcPath);
-    fs.writeFileSync(outputPath, content);
+    const raw = fs.readFileSync(srcPath, 'utf8');
+    const processed = processHtml(raw, htmlFile);
 
+    fs.writeFileSync(path.join(OUTPUT_DIR, htmlFile), processed);
     console.log(`✓ ${htmlFile} -> public/dist/${htmlFile}`);
+
+    fs.writeFileSync(srcPath, processed);
+    console.log(`✓ ${htmlFile} -> public/${htmlFile} (已更新为CDN引用)`);
   }
 
-  console.log(`\n📝 部署 public/dist/ 目录到 OSS 即可\n`);
+  console.log(`\n✅ 完成。记得运行 npm run bundle 后再上传 bundle 到 OSS\n`);
 }
 
 main();

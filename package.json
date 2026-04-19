@@ -5,10 +5,14 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node dev.js"
+    "dev": "node dev.js",
+    "bundle": "node scripts/bundle.js",
+    "cdn": "node scripts/bundle.js && node scripts/update-html-cdn.js",
+    "upload": "node scripts/oss-upload.js"
   },
   "dependencies": {
     "ali-oss": "^6.23.0",
+    "axios": "^1.15.0",
     "dotenv": "^17.4.2",
     "express": "^4.18.2",
     "pptxgenjs": "^4.0.1",

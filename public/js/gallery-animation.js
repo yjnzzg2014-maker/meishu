@@ -35,18 +35,21 @@ class GalleryAnimation {
 
   _prepareOffscreens() {
     this._offscreens = [];
-    const size = Math.min(this.canvas.width / 5 * 0.55, 100);
-    console.log('[Gallery] artworks received:', this.artworks.length, 'size:', size, 'AssetLoader.ready:', AssetLoader.ready);
+    const W = this.canvas.width, H = this.canvas.height;
+    // Display radius — bigger than before, capped for very wide screens
+    const displaySize = Math.min(W / 3.2, 140);
+    // Render at 2× for crisp quality when displayed
+    const renderR = displaySize * 2;
+
     for (const art of this.artworks) {
-      console.log('[Gallery] art.state:', art.state, 'fruitName:', art.fruitName);
-      if (!art.state) { console.warn('[Gallery] skipping art: no state'); continue; }
+      if (!art.state) continue;
       try {
         const oc = document.createElement('canvas');
-        oc.width = size * 2;
-        oc.height = size * 2;
+        oc.width = renderR * 2;
+        oc.height = renderR * 2;
         const ctx = oc.getContext('2d');
         if (!ctx) continue;
-        const cx = size, cy = size, r = size;
+        const cx = renderR, cy = renderR, r = renderR;
         const srcR = art.state.canvasRadius || 400;
         const scale = r / srcR;
         ctx.save();
@@ -54,12 +57,7 @@ class GalleryAnimation {
         ctx.arc(cx, cy, r, 0, Math.PI * 2);
         ctx.clip();
         const sunImg = AssetLoader.get('sun_' + (art.state.sunSkin || 'clay'));
-        console.log('[Gallery] sunImg for', art.state.sunSkin, ':', sunImg);
-        if (!sunImg) {
-          // Fallback: plain colored circle so we can see the sun is being positioned correctly
-          ctx.fillStyle = '#ffcc00';
-          ctx.fill();
-        }
+        if (!sunImg) { ctx.fillStyle = '#ffcc00'; ctx.fill(); }
         drawSun(ctx, cx, cy, r, art.state.sunSkin || 'clay', 1, 'symmetric');
         (art.state.shapes || []).forEach(shape => {
           const dx = shape.x - srcR, dy = shape.y - srcR;
@@ -74,17 +72,17 @@ class GalleryAnimation {
         ctx.restore();
         this._offscreens.push({
           canvas: oc,
-          size,
+          size: displaySize,       // visual display radius
+          renderR,                 // offscreen canvas logical radius
           fruitName: art.fruitName,
           rotationSpeed: (0.001 + Math.random() * 0.003) * (Math.random() < 0.5 ? 1 : -1),
           rotation: Math.random() * Math.PI * 2,
-          hangY: this.canvas.height * (0.05 + Math.random() * 0.22),
+          hangY: H * (0.06 + Math.random() * 0.25),
         });
       } catch (e) {
         console.warn('[Gallery] offscreen render failed:', e);
       }
     }
-    console.log('[Gallery] _offscreens prepared:', this._offscreens.length);
   }
 
   _generateStars() {
@@ -137,15 +135,22 @@ class GalleryAnimation {
     // Hanging artworks
     if (this._offscreens.length === 0) return;
     const count = this._offscreens.length;
-    const spacing = count >= 5 ? W / count : W / Math.max(count, 1);
+    const displaySize = this._offscreens[0].size;
+    // Ensure spacing is wide enough that totalW > W + 4*displaySize,
+    // so items always enter smoothly from off-screen right (never flash mid-screen).
+    const minSpacing = displaySize * 4.2;
+    const naturalSpacing = W / count;
+    const spacing = Math.max(naturalSpacing, minSpacing);
     const totalW = spacing * count;
     const loopX = this._scrollX % totalW;
 
-    // Compute positions
+    // Normalize each item to its visible position using modular arithmetic.
+    // After normalization x is in [0, totalW). If x > W + margin we bring it left;
+    // this places off-screen-right items at negative x so they scroll cleanly into view.
+    const margin = displaySize * 2;
     const positions = this._offscreens.map((item, i) => {
-      let x = i * spacing - loopX + spacing / 2;
-      if (x < -item.size * 2) x += totalW;
-      if (x > W + item.size * 2) x -= totalW;
+      let x = ((i * spacing + spacing / 2 - loopX) % totalW + totalW) % totalW;
+      if (x > W + margin) x -= totalW;   // move ahead-of-screen items just off-screen left
       return { ...item, x };
     });
 
@@ -153,6 +158,7 @@ class GalleryAnimation {
     ctx.strokeStyle = 'rgba(255,230,180,0.6)';
     ctx.lineWidth = 2;
     positions.forEach(({ x, hangY }) => {
+      if (x < -margin || x > W + margin) return;
       ctx.beginPath();
       ctx.moveTo(x, 0);
       ctx.lineTo(x, hangY);
@@ -161,6 +167,7 @@ class GalleryAnimation {
 
     // Draw artworks with rotation around circle center
     positions.forEach(({ canvas: oc, size, x, hangY, rotation }) => {
+      if (x < -margin || x > W + margin) return;
       const cx = x;
       const cy = hangY + size;
       ctx.save();
@@ -177,7 +184,8 @@ class GalleryAnimation {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
     positions.forEach(({ size, fruitName, x, hangY }) => {
-      ctx.font = `bold ${Math.round(size * 0.22)}px "PingFang SC", Arial, sans-serif`;
+      if (x < -margin || x > W + margin) return;
+      ctx.font = `bold ${Math.round(size * 0.25)}px "PingFang SC", Arial, sans-serif`;
       ctx.fillText(fruitName || '', x, hangY + size * 2 + 10);
     });
   }

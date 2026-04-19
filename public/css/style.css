@@ -982,6 +982,39 @@ textarea {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
 }
 
+#asset-section.collapsed .section-header {
+  margin-bottom: 0;
+}
+
+#asset-section.collapsed #custom-assets-area {
+  display: none;
+}
+
+.collapse-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  color: #D4956A;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+.collapse-btn:hover {
+  background: rgba(212, 149, 106, 0.1);
+}
+
+.collapse-btn svg {
+  transition: transform 0.25s ease;
+}
+
+#asset-section.collapsed .collapse-btn svg {
+  transform: rotate(180deg);
+}
+
 .section-header {
   display: flex;
   align-items: center;
@@ -1080,6 +1113,7 @@ textarea {
 }
 
 .asset-card {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1087,6 +1121,11 @@ textarea {
   background: #FAFAFA;
   border-radius: 14px;
   border: 1px solid #EEE;
+}
+
+.asset-card.selected {
+  border-color: #FF6B6B;
+  background: #FFF5F5;
 }
 
 .asset-card canvas {

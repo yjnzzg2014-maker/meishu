@@ -4,8 +4,27 @@
 const AssetLoader = {
   cache: {},
   ready: false,
+  _supportsWebP: false,
+
+  async _detectWebP() {
+    return new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => resolve(img.width > 0);
+      img.onerror = () => resolve(false);
+      img.src = 'data:image/webp;base64,UklGRjoAAABXRUJQVlA4IC4AAACyAgCdASoCAAIALmk0mk0iIiIiIgBoSygABc6WWgAA/veff/0PP8bA//LwYAAA';
+    });
+  },
+
+  async _loadImagePreferWebP(pngPath, makeWhiteTransparent = false) {
+    if (this._supportsWebP && pngPath.startsWith('images/') && pngPath.endsWith('.png')) {
+      const img = await this.loadImage(pngPath.replace('.png', '.webp'), makeWhiteTransparent);
+      if (img) return img;
+    }
+    return this.loadImage(pngPath, makeWhiteTransparent);
+  },
 
   async loadAll() {
+    this._supportsWebP = await this._detectWebP();
     await Promise.all([
       this.generateSunSkins(),
       this.loadShapeAssets(),
@@ -28,12 +47,21 @@ const AssetLoader = {
     const original = this.cache[key];
     if (!original) return null;
 
+    // Build a color layer pre-clipped to original's alpha so transparent
+    // pixels stay transparent and the 'color' blend only touches opaque pixels.
+    const colorLayer = this.createCanvas(original.width, original.height);
+    const clx = colorLayer.getContext('2d');
+    clx.fillStyle = color;
+    clx.fillRect(0, 0, colorLayer.width, colorLayer.height);
+    clx.globalCompositeOperation = 'destination-in';
+    clx.drawImage(original, 0, 0);
+
     const c = this.createCanvas(original.width, original.height);
     const ctx = c.getContext('2d');
     ctx.drawImage(original, 0, 0);
-    ctx.globalCompositeOperation = 'source-atop';
-    ctx.fillStyle = color;
-    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.globalCompositeOperation = 'color';
+    ctx.drawImage(colorLayer, 0, 0);
+    ctx.globalCompositeOperation = 'source-over';
 
     this.cache[cacheKey] = c;
     return c;
@@ -58,7 +86,7 @@ const AssetLoader = {
   async generateSunSkins() {
     for (const skin of SUN_SKINS) {
       if (skin.imagePath) {
-        const img = await this.loadImage(skin.imagePath, skin.makeWhiteTransparent);
+        const img = await this._loadImagePreferWebP(skin.imagePath, skin.makeWhiteTransparent);
         if (img) {
           const size = 400;
           const c = this.createCanvas(size, size);
@@ -155,7 +183,7 @@ const AssetLoader = {
   },
 
   async _loadShapeEntry(shape) {
-    const img = await this.loadImage(shape.src);
+    const img = await this._loadImagePreferWebP(shape.src);
     if (img) {
       const size = 120;
       const c = this.createCanvas(size, size);
@@ -183,7 +211,7 @@ const AssetLoader = {
   },
 
   async _loadFaceEntry(part, size) {
-    const img = await this.loadImage(part.src);
+    const img = await this._loadImagePreferWebP(part.src);
     if (img) {
       size = size || 100;
       const c = this.createCanvas(size, size);

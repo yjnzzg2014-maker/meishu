@@ -156,7 +156,7 @@ class StudentApp {
     });
 
     // Invalidate cached rect after layout changes
-    requestAnimationFrame(() => { this._canvasRect = this.canvas.getBoundingClientRect(); });
+    this._canvasRect = this.canvas.getBoundingClientRect();
   }
 
   renderShapePanel() {
@@ -263,6 +263,10 @@ class StudentApp {
       if (isNoTint) {
         this.selectedTintColor = null;
         this._expandedHue = null;
+        if (this.selectedShape) {
+          this.selectedShape.tintColor = null;
+          this.render();
+        }
       } else {
         this._expandedHue = (this._expandedHue === hueKey) ? null : hueKey;
       }
@@ -283,6 +287,10 @@ class StudentApp {
           e.stopPropagation();
           this.selectedTintColor = shade;
           this._expandedHue = null;
+          if (this.selectedShape) {
+            this.selectedShape.tintColor = shade;
+            this.render();
+          }
           this.renderColorPanel();
         });
         grid.appendChild(sw);
@@ -361,6 +369,8 @@ class StudentApp {
     document.getElementById('btn-clear')?.addEventListener('click', () => this.clearAll());
     document.getElementById('btn-copy')?.addEventListener('click', () => this.copySelected());
     document.getElementById('btn-delete')?.addEventListener('click', () => this.deleteSelected());
+    document.getElementById('btn-layer-up')?.addEventListener('click', () => this.moveLayerUp());
+    document.getElementById('btn-layer-down')?.addEventListener('click', () => this.moveLayerDown());
     this.setupCategoryTabs();
   }
 
@@ -371,7 +381,7 @@ class StudentApp {
 
   _updateSelectionToolbar() {
     const hasSelection = !!(this.selectedShape || this.selectedFacePart);
-    ['btn-copy', 'btn-delete'].forEach(id => {
+    ['btn-copy', 'btn-delete', 'btn-layer-up', 'btn-layer-down'].forEach(id => {
       const btn = document.getElementById(id);
       if (!btn) return;
       btn.classList.toggle('active', hasSelection);
@@ -402,6 +412,28 @@ class StudentApp {
     this._hideCycleIndicator();
     this.syncToServer();
     this.render();
+  }
+
+  moveLayerUp() {
+    if (!this.selectedShape) return;
+    const idx = this.shapes.indexOf(this.selectedShape);
+    if (idx < this.shapes.length - 1) {
+      this.saveHistory();
+      [this.shapes[idx], this.shapes[idx + 1]] = [this.shapes[idx + 1], this.shapes[idx]];
+      this.syncToServer();
+      this.render();
+    }
+  }
+
+  moveLayerDown() {
+    if (!this.selectedShape) return;
+    const idx = this.shapes.indexOf(this.selectedShape);
+    if (idx > 0) {
+      this.saveHistory();
+      [this.shapes[idx], this.shapes[idx - 1]] = [this.shapes[idx - 1], this.shapes[idx]];
+      this.syncToServer();
+      this.render();
+    }
   }
 
   addShape(type) {
@@ -551,7 +583,7 @@ class StudentApp {
         this.selectedFacePart.offsetY = y - this.dragOffset.y - this.centerY;
         this.faceMode.constrainToSun(this.selectedFacePart);
         this.throttledSync();
-        this._scheduleRender();
+        this.render();
         return;
       }
 
@@ -567,7 +599,7 @@ class StudentApp {
         this.selectedShape.angle = toCenterAngle;
 
         this.throttledSync();
-        this._scheduleRender();
+        this.render();
       }
     });
 
@@ -631,7 +663,7 @@ class StudentApp {
           }
 
           this.throttledSync();
-          this._scheduleRender();
+          this.render();
         }
       }
     }, { passive: true });
@@ -1216,14 +1248,36 @@ this.history.push({
 
   renderShapes(ctx) {
     this.shapes.forEach(shape => {
+      // 选中形状添加阴影效果
+      if (this.selectedShape && shape.id === this.selectedShape.id) {
+        ctx.save();
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
+        ctx.shadowBlur = 12;
+        ctx.shadowOffsetX = 3;
+        ctx.shadowOffsetY = 5;
+      }
       drawShape(ctx, shape, shape.size);
+      if (this.selectedShape && shape.id === this.selectedShape.id) {
+        ctx.restore();
+      }
     });
   }
 
   renderFaceParts(ctx) {
     const sunR = getSunRadius(this.canvasRadius, this.mode);
     this.faceParts.forEach(part => {
+      // 选中五官添加阴影效果
+      if (this.selectedFacePart && part.id === this.selectedFacePart.id) {
+        ctx.save();
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
+        ctx.shadowBlur = 12;
+        ctx.shadowOffsetX = 3;
+        ctx.shadowOffsetY = 5;
+      }
       drawFacePart(ctx, part, this.centerX, this.centerY, sunR);
+      if (this.selectedFacePart && part.id === this.selectedFacePart.id) {
+        ctx.restore();
+      }
     });
   }
 
@@ -1244,6 +1298,13 @@ this.history.push({
     }
 
     ctx.save();
+
+    // 阴影效果：选中时形状浮起
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+    ctx.shadowBlur = 15;
+    ctx.shadowOffsetX = 4;
+    ctx.shadowOffsetY = 6;
+
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
     ctx.lineWidth = 3;
     ctx.setLineDash([6, 4]);
@@ -1251,6 +1312,13 @@ this.history.push({
     ctx.arc(x, y, radius, 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
+
+    // 重置阴影
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+
     ctx.restore();
   }
 }

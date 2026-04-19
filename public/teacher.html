@@ -61,9 +61,14 @@
     </div>
 
     <!-- Asset Management Section -->
-    <div id="asset-section" class="teacher-section" role="region" aria-labelledby="asset-heading">
+    <div id="asset-section" class="teacher-section collapsed" role="region" aria-labelledby="asset-heading">
       <div class="section-header">
-        <h2 id="asset-heading">素材管理</h2>
+        <div style="display:flex;align-items:center;gap:8px">
+          <h2 id="asset-heading">素材管理</h2>
+          <button id="btn-collapse-assets" class="collapse-btn" aria-label="展开素材管理" aria-expanded="false" title="折叠/展开">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+          </button>
+        </div>
         <div class="section-actions">
           <button id="btn-draw-shape" class="action-btn">绘制素材</button>
           <button id="btn-import-shape" class="action-btn">导入点线</button>
@@ -76,7 +81,11 @@
       <!-- Custom shapes list -->
       <div id="custom-assets-area">
         <div class="asset-group">
-          <h3>自定义素材 (点/线)</h3>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <h3 style="margin:0">自定义素材 (点/线)</h3>
+            <button id="btn-select-all-shapes" class="action-btn" style="padding:4px 12px;font-size:12px">全选</button>
+            <button id="btn-delete-selected-shapes" class="action-btn accent" style="padding:4px 12px;font-size:12px" disabled>删除选中 (0)</button>
+          </div>
           <div id="custom-shapes-grid" class="asset-grid" role="list" aria-label="自定义点线素材列表"></div>
           <p id="no-custom-shapes" class="empty-hint" role="status">暂无自定义素材，点击"绘制素材"添加</p>
         </div>

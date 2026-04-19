@@ -23,6 +23,9 @@ class TeacherApp {
     this.gallerySelectMode = false;
     this.gallerySelectedIds = new Set();
 
+    // Shape multi-select state
+    this.selectedShapeIds = new Set();
+
     // Reduced motion preference
     this.prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -63,6 +66,17 @@ class TeacherApp {
         this.client.toggleLock(this.locked);
         lockBtn.classList.toggle('active', this.locked);
         lockBtn.textContent = this.locked ? '已锁定' : '锁定操作';
+      });
+    }
+
+    // Asset section collapse toggle
+    const collapseBtn = document.getElementById('btn-collapse-assets');
+    const assetSection = document.getElementById('asset-section');
+    if (collapseBtn && assetSection) {
+      collapseBtn.addEventListener('click', () => {
+        const collapsed = assetSection.classList.toggle('collapsed');
+        collapseBtn.setAttribute('aria-expanded', String(!collapsed));
+        collapseBtn.setAttribute('aria-label', collapsed ? '展开素材管理' : '折叠素材管理');
       });
     }
 
@@ -308,6 +322,57 @@ class TeacherApp {
         console.error('Failed to import shape:', e);
       }
     });
+
+    // --- Shape Multi-Select ---
+    const selectAllBtn = document.getElementById('btn-select-all-shapes');
+    const deleteSelectedBtn = document.getElementById('btn-delete-selected-shapes');
+
+    if (selectAllBtn) {
+      selectAllBtn.addEventListener('click', () => {
+        const customShapes = SHAPES.filter(s => s.custom);
+        if (this.selectedShapeIds.size === customShapes.length) {
+          // Deselect all
+          this.selectedShapeIds.clear();
+          selectAllBtn.textContent = '全选';
+        } else {
+          // Select all
+          customShapes.forEach(s => this.selectedShapeIds.add(s.id));
+          selectAllBtn.textContent = '取消全选';
+        }
+        this.renderCustomAssets();
+      });
+    }
+
+    if (deleteSelectedBtn) {
+      deleteSelectedBtn.addEventListener('click', async () => {
+        const count = this.selectedShapeIds.size;
+        if (count === 0) return;
+        if (!confirm(`确定删除选中的 ${count} 个素材？`)) return;
+
+        try {
+          for (const id of this.selectedShapeIds) {
+            await fetch(`/api/shapes/${id}`, { method: 'DELETE' });
+          }
+          this.selectedShapeIds.clear();
+          // Don't call reload/render here - socket event will handle it
+        } catch (e) {
+          console.error('Failed to delete shapes:', e);
+        }
+      });
+    }
+  }
+
+  updateDeleteSelectedBtn() {
+    const deleteSelectedBtn = document.getElementById('btn-delete-selected-shapes');
+    const selectAllBtn = document.getElementById('btn-select-all-shapes');
+    if (deleteSelectedBtn) {
+      deleteSelectedBtn.disabled = this.selectedShapeIds.size === 0;
+      deleteSelectedBtn.textContent = `删除选中 (${this.selectedShapeIds.size})`;
+    }
+    if (selectAllBtn) {
+      const customShapes = SHAPES.filter(s => s.custom);
+      selectAllBtn.textContent = this.selectedShapeIds.size === customShapes.length ? '取消全选' : '全选';
+    }
   }
 
   renderCustomAssets() {
@@ -322,6 +387,25 @@ class TeacherApp {
       customShapes.forEach(shape => {
         const card = document.createElement('div');
         card.className = 'asset-card';
+        if (this.selectedShapeIds.has(shape.id)) {
+          card.classList.add('selected');
+        }
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = this.selectedShapeIds.has(shape.id);
+        checkbox.style.cssText = 'position:absolute;top:4px;left:4px;z-index:1;cursor:pointer';
+        checkbox.addEventListener('change', () => {
+          if (checkbox.checked) {
+            this.selectedShapeIds.add(shape.id);
+            card.classList.add('selected');
+          } else {
+            this.selectedShapeIds.delete(shape.id);
+            card.classList.remove('selected');
+          }
+          this.updateDeleteSelectedBtn();
+        });
+        card.appendChild(checkbox);
 
         const img = AssetLoader.get(`shape_${shape.id}`);
         if (img) {
@@ -345,14 +429,14 @@ class TeacherApp {
           if (!confirm(`确定删除素材"${shape.name}"？`)) return;
           try {
             await fetch(`/api/shapes/${shape.id}`, { method: 'DELETE' });
-            await AssetLoader.reloadCustomAssets();
-            this.renderCustomAssets();
           } catch (e) { console.error(e); }
         });
         card.appendChild(delBtn);
 
         shapesGrid.appendChild(card);
       });
+
+      this.updateDeleteSelectedBtn();
     }
 
     // Render custom faces
@@ -391,8 +475,6 @@ class TeacherApp {
             if (!confirm(`确定删除五官"${face.name}"？`)) return;
             try {
               await fetch(`/api/faces/${face.id}`, { method: 'DELETE' });
-              await AssetLoader.reloadCustomAssets();
-              this.renderCustomAssets();
             } catch (e) { console.error(e); }
           });
           card.appendChild(delBtn);

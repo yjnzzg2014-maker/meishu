@@ -13,6 +13,7 @@
     "socket.io": "^4.7.2"
   },
   "devDependencies": {
-    "browser-sync": "^3.0.4"
+    "browser-sync": "^3.0.4",
+    "sharp": "^0.33"
   }
 }

@@ -8,6 +8,7 @@
     "dev": "node dev.js"
   },
   "dependencies": {
+    "ali-oss": "^6.23.0",
     "express": "^4.18.2",
     "pptxgenjs": "^4.0.1",
     "socket.io": "^4.7.2"
